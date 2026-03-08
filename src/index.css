@@ -1,0 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Pirata+One&family=UnifrakturMaguntia&family=Montserrat:wght@700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --animate-breath: breath 2s ease-in-out infinite;
+
+  @keyframes breath {
+    0%, 100% {
+      transform: scale(1);
+      box-shadow: 0 0 15px rgba(234, 179, 8, 0.4);
+    }
+    50% {
+      transform: scale(1.05);
+      box-shadow: 0 0 30px rgba(234, 179, 8, 0.8);
+    }
+  }
+}
