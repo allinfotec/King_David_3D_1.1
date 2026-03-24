@@ -147,6 +147,16 @@ export function Player() {
     };
   }, []); // Empty dependency array for stable input handling
 
+  const slingSound = useRef<HTMLAudioElement | null>(null);
+  const knifeSound = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    slingSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2065/2065-preview.mp3');
+    slingSound.current.volume = 0.5;
+    knifeSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2951/2951-preview.mp3');
+    knifeSound.current.volume = 0.5;
+  }, []);
+
   // Attack handler
   useEffect(() => {
     const triggerAttack = (type: 'sling' | 'knife') => {
@@ -159,6 +169,11 @@ export function Player() {
           setWeapon('sling');
           setLastShot(now);
           setIsAttacking(true);
+          
+          if (slingSound.current) {
+              slingSound.current.currentTime = 0;
+              slingSound.current.play().catch(() => {});
+          }
           
           // Delay shot for windup animation (100ms) - Reduced for responsiveness
           setTimeout(() => {
@@ -213,6 +228,11 @@ export function Player() {
         setWeapon('knife');
         setIsAttacking(true);
         setLastShot(now);
+        
+        if (knifeSound.current) {
+            knifeSound.current.currentTime = 0;
+            knifeSound.current.play().catch(() => {});
+        }
         
         const enemies = useStore.getState().enemies;
         const playerPos = playerRef.current?.translation();

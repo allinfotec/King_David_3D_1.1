@@ -333,9 +333,9 @@ function UI() {
 
 function AmbientSound() {
   const [audio] = useState(() => {
-    const a = new Audio('https://assets.mixkit.co/active_storage/sfx/1205/1205-preview.mp3'); // Wind/Desert ambience
+    const a = new Audio('https://assets.mixkit.co/active_storage/sfx/246/246-preview.mp3'); // Desert wind howling
     a.loop = true;
-    a.volume = 0.3;
+    a.volume = 0.05; // Lower volume
     return a;
   });
 
