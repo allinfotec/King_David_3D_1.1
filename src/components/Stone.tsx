@@ -81,7 +81,7 @@ export function Stone({ id, position, velocity }: StoneProps) {
       >
         <mesh castShadow>
           <sphereGeometry args={[0.1, 16, 16]} />
-          <meshStandardMaterial color="#888" />
+          <meshPhysicalMaterial color="#888" />
         </mesh>
       </Trail>
     </RigidBody>

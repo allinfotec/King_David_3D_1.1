@@ -14,7 +14,7 @@ function Tree({ position, scale = 1, type = 'normal' }: { position: [number, num
       <RigidBody type="fixed" colliders="hull">
         <mesh castShadow receiveShadow position={[0, 1.5, 0]}>
           <cylinderGeometry args={[0.25, 0.4, 3, 7]} />
-          <meshStandardMaterial color={isDead ? "#4e342e" : "#3e2723"} roughness={0.9} />
+          <meshPhysicalMaterial color={isDead ? "#4e342e" : "#3e2723"} roughness={0.9} />
         </mesh>
       </RigidBody>
       
@@ -22,15 +22,15 @@ function Tree({ position, scale = 1, type = 'normal' }: { position: [number, num
       <group position={[0, 3, 0]}>
         <mesh castShadow receiveShadow rotation={[0.5, 0, 0]} position={[0, 0.5, 0.2]}>
           <cylinderGeometry args={[0.1, 0.2, 1.5, 5]} />
-          <meshStandardMaterial color={isDead ? "#4e342e" : "#3e2723"} />
+          <meshPhysicalMaterial color={isDead ? "#4e342e" : "#3e2723"} />
         </mesh>
         <mesh castShadow receiveShadow rotation={[-0.4, 0.4, 0]} position={[-0.5, 0.2, -0.2]}>
           <cylinderGeometry args={[0.08, 0.18, 1.4, 5]} />
-          <meshStandardMaterial color={isDead ? "#4e342e" : "#3e2723"} />
+          <meshPhysicalMaterial color={isDead ? "#4e342e" : "#3e2723"} />
         </mesh>
         <mesh castShadow receiveShadow rotation={[0.2, -0.5, 0.3]} position={[0.5, 0.4, 0]}>
           <cylinderGeometry args={[0.09, 0.15, 1.3, 5]} />
-          <meshStandardMaterial color={isDead ? "#4e342e" : "#3e2723"} />
+          <meshPhysicalMaterial color={isDead ? "#4e342e" : "#3e2723"} />
         </mesh>
       </group>
 
@@ -39,19 +39,19 @@ function Tree({ position, scale = 1, type = 'normal' }: { position: [number, num
         <group position={[0, 4, 0]}>
             <mesh castShadow receiveShadow position={[0, 0, 0]} scale={1.2}>
             <dodecahedronGeometry args={[1]} />
-            <meshStandardMaterial color="#2d5a27" roughness={0.8} />
+            <meshPhysicalMaterial color="#2d5a27" roughness={0.8} clearcoat={0.1} clearcoatRoughness={0.8} />
             </mesh>
             <mesh castShadow receiveShadow position={[0.8, -0.5, 0.5]} scale={0.8}>
             <dodecahedronGeometry args={[1]} />
-            <meshStandardMaterial color="#3a6b32" roughness={0.8} />
+            <meshPhysicalMaterial color="#3a6b32" roughness={0.8} clearcoat={0.1} clearcoatRoughness={0.8} />
             </mesh>
             <mesh castShadow receiveShadow position={[-0.7, 0.2, -0.6]} scale={0.9}>
             <dodecahedronGeometry args={[1]} />
-            <meshStandardMaterial color="#1e4620" roughness={0.8} />
+            <meshPhysicalMaterial color="#1e4620" roughness={0.8} clearcoat={0.1} clearcoatRoughness={0.8} />
             </mesh>
             <mesh castShadow receiveShadow position={[0.3, 0.8, -0.3]} scale={0.7}>
             <dodecahedronGeometry args={[1]} />
-            <meshStandardMaterial color="#4a7c3a" roughness={0.8} />
+            <meshPhysicalMaterial color="#4a7c3a" roughness={0.8} clearcoat={0.1} clearcoatRoughness={0.8} />
             </mesh>
         </group>
        )}
@@ -69,25 +69,25 @@ function Rock({ position, scale = 1 }: { position: [number, number, number], sca
         {/* Main mass */}
         <mesh castShadow receiveShadow>
           <dodecahedronGeometry args={[1.5, 1]} /> {/* More detail */}
-          <meshStandardMaterial color="#795548" roughness={0.8} flatShading />
+          <meshPhysicalMaterial color="#795548" roughness={0.8} flatShading clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         {/* Detail chunks */}
         <mesh castShadow receiveShadow position={[1, -0.5, 0.5]} scale={0.6}>
           <dodecahedronGeometry args={[1.2, 0]} />
-          <meshStandardMaterial color="#6d4c41" roughness={0.9} flatShading />
+          <meshPhysicalMaterial color="#6d4c41" roughness={0.9} flatShading clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         <mesh castShadow receiveShadow position={[-0.8, -0.8, -0.5]} scale={0.7}>
           <dodecahedronGeometry args={[1.1, 0]} />
-          <meshStandardMaterial color="#5d4037" roughness={0.9} flatShading />
+          <meshPhysicalMaterial color="#5d4037" roughness={0.9} flatShading clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         <mesh castShadow receiveShadow position={[0, 1.2, 0]} scale={0.4}>
           <dodecahedronGeometry args={[1, 0]} />
-          <meshStandardMaterial color="#8d6e63" roughness={0.9} flatShading />
+          <meshPhysicalMaterial color="#8d6e63" roughness={0.9} flatShading clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         {/* Moss/Lichen patch */}
         <mesh position={[0.5, 0.5, 0.8]} scale={0.3}>
            <dodecahedronGeometry args={[1, 0]} />
-           <meshStandardMaterial color="#556b2f" roughness={1} />
+           <meshPhysicalMaterial color="#556b2f" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
       </group>
     </RigidBody>
@@ -99,15 +99,15 @@ function Bush({ position, scale = 1, color = '#556b2f' }: { position: [number, n
     <group position={position} scale={scale}>
       <mesh castShadow receiveShadow position={[0, 0.3, 0]}>
         <dodecahedronGeometry args={[0.5]} />
-        <meshStandardMaterial color={color} roughness={1} />
+        <meshPhysicalMaterial color={color} roughness={1} />
       </mesh>
       <mesh castShadow receiveShadow position={[0.4, 0.2, 0.3]} scale={0.8}>
         <dodecahedronGeometry args={[0.5]} />
-        <meshStandardMaterial color={color} roughness={1} />
+        <meshPhysicalMaterial color={color} roughness={1} />
       </mesh>
       <mesh castShadow receiveShadow position={[-0.3, 0.4, -0.2]} scale={0.7}>
         <dodecahedronGeometry args={[0.5]} />
-        <meshStandardMaterial color={color} roughness={1} />
+        <meshPhysicalMaterial color={color} roughness={1} />
       </mesh>
     </group>
   );
@@ -175,7 +175,7 @@ function Grass() {
 
   return (
     <instancedMesh ref={meshRef} args={[geometry, undefined, count]} receiveShadow>
-      <meshStandardMaterial 
+      <meshPhysicalMaterial 
         color="#4a7c3a" 
         side={THREE.DoubleSide} 
         roughness={0.8}
@@ -202,7 +202,7 @@ function SmallStones() {
   return (
     <Instances range={count}>
       <dodecahedronGeometry args={[0.5, 0]} />
-      <meshStandardMaterial color="#5d4037" roughness={0.9} />
+      <meshPhysicalMaterial color="#5d4037" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
       {positions.map((p, i) => (
         <Instance
           key={i}
@@ -221,35 +221,35 @@ function Hills() {
       {/* Distant Hills - Ring around the map */}
       <mesh position={[-120, -5, -120]} scale={[80, 40, 80]}>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color="#5d4037" roughness={1} />
+        <meshPhysicalMaterial color="#5d4037" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
       </mesh>
       <mesh position={[0, -10, -160]} scale={[120, 50, 80]}>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color="#4e342e" roughness={1} />
+        <meshPhysicalMaterial color="#4e342e" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
       </mesh>
       <mesh position={[120, -5, -120]} scale={[80, 40, 80]}>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color="#5d4037" roughness={1} />
+        <meshPhysicalMaterial color="#5d4037" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
       </mesh>
        <mesh position={[160, -5, 0]} scale={[80, 50, 100]}>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color="#4e342e" roughness={1} />
+        <meshPhysicalMaterial color="#4e342e" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
       </mesh>
        <mesh position={[120, -5, 120]} scale={[80, 40, 80]}>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color="#5d4037" roughness={1} />
+        <meshPhysicalMaterial color="#5d4037" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
       </mesh>
       <mesh position={[0, -10, 160]} scale={[120, 50, 80]}>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color="#4e342e" roughness={1} />
+        <meshPhysicalMaterial color="#4e342e" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
       </mesh>
        <mesh position={[-120, -5, 120]} scale={[80, 40, 80]}>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color="#5d4037" roughness={1} />
+        <meshPhysicalMaterial color="#5d4037" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
       </mesh>
       <mesh position={[-160, -5, 0]} scale={[80, 50, 100]}>
         <dodecahedronGeometry args={[1, 0]} />
-        <meshStandardMaterial color="#4e342e" roughness={1} />
+        <meshPhysicalMaterial color="#4e342e" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
       </mesh>
     </group>
   );
@@ -262,25 +262,25 @@ function Pillar({ position, scale = 1, broken = false }: { position: [number, nu
         {/* Base */}
         <mesh castShadow receiveShadow position={[0, 0.25, 0]}>
           <boxGeometry args={[1.2, 0.5, 1.2]} />
-          <meshStandardMaterial color="#d7ccc8" roughness={0.9} />
+          <meshPhysicalMaterial color="#d7ccc8" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         {/* Column */}
         <mesh castShadow receiveShadow position={[0, broken ? 1.5 : 2.5, 0]}>
           <cylinderGeometry args={[0.4, 0.4, broken ? 2 : 4, 8]} />
-          <meshStandardMaterial color="#d7ccc8" roughness={0.9} />
+          <meshPhysicalMaterial color="#d7ccc8" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         {/* Top (if not broken) */}
         {!broken && (
           <mesh castShadow receiveShadow position={[0, 4.75, 0]}>
             <boxGeometry args={[1.2, 0.5, 1.2]} />
-            <meshStandardMaterial color="#d7ccc8" roughness={0.9} />
+            <meshPhysicalMaterial color="#d7ccc8" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
           </mesh>
         )}
         {/* Debris if broken */}
         {broken && (
           <mesh castShadow receiveShadow position={[1, 0.5, 0]} rotation={[0, 0, 1.2]}>
              <cylinderGeometry args={[0.4, 0.4, 1.5, 8]} />
-             <meshStandardMaterial color="#d7ccc8" roughness={0.9} />
+             <meshPhysicalMaterial color="#d7ccc8" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
           </mesh>
         )}
       </group>
@@ -295,31 +295,31 @@ function Well({ position }: { position: [number, number, number] }) {
         {/* Base ring */}
         <mesh castShadow receiveShadow position={[0, 0.5, 0]}>
           <cylinderGeometry args={[1.5, 1.5, 1, 12]} />
-          <meshStandardMaterial color="#8d6e63" roughness={1} />
+          <meshPhysicalMaterial color="#8d6e63" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         {/* Inner hole (fake depth) */}
         <mesh position={[0, 0.9, 0]}>
           <cylinderGeometry args={[1.2, 1.2, 0.1, 12]} />
-          <meshStandardMaterial color="#1a1a1a" roughness={1} />
+          <meshPhysicalMaterial color="#1a1a1a" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         {/* Wooden supports */}
         <mesh castShadow receiveShadow position={[-1.2, 1.5, 0]}>
           <boxGeometry args={[0.2, 2, 0.2]} />
-          <meshStandardMaterial color="#4e342e" />
+          <meshPhysicalMaterial color="#4e342e" clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         <mesh castShadow receiveShadow position={[1.2, 1.5, 0]}>
           <boxGeometry args={[0.2, 2, 0.2]} />
-          <meshStandardMaterial color="#4e342e" />
+          <meshPhysicalMaterial color="#4e342e" clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         {/* Crossbeam */}
         <mesh castShadow receiveShadow position={[0, 2.5, 0]}>
           <boxGeometry args={[2.8, 0.2, 0.2]} />
-          <meshStandardMaterial color="#4e342e" />
+          <meshPhysicalMaterial color="#4e342e" clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         {/* Rope */}
         <mesh castShadow position={[0, 1.5, 0]}>
           <cylinderGeometry args={[0.02, 0.02, 2, 8]} />
-          <meshStandardMaterial color="#d7ccc8" />
+          <meshPhysicalMaterial color="#d7ccc8" clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
       </group>
     </RigidBody>
@@ -380,8 +380,8 @@ export function World() {
       {/* Ground - Moved to y=-2 to match physics/visuals */}
       <RigidBody type="fixed" colliders="hull">
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
-          <planeGeometry args={[200, 200]} />
-          <meshStandardMaterial map={texture} color="#4e342e" roughness={1} />
+          <planeGeometry args={[200, 200, 64, 64]} />
+          <meshPhysicalMaterial map={texture} bumpMap={texture} bumpScale={0.05} color="#4e342e" roughness={1} clearcoat={0.1} clearcoatRoughness={0.9} />
         </mesh>
       </RigidBody>
 
@@ -413,16 +413,16 @@ export function World() {
       <RigidBody type="fixed" colliders="cuboid" position={[-10, -1, 10]}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[8, 3, 1]} />
-          <meshStandardMaterial color="#a1887f" roughness={0.9} />
+          <meshPhysicalMaterial color="#a1887f" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         <mesh castShadow receiveShadow position={[2, 2, 0]} rotation={[0, 0, 0.2]}>
           <boxGeometry args={[2, 1, 0.8]} />
-          <meshStandardMaterial color="#a1887f" roughness={0.9} />
+          <meshPhysicalMaterial color="#a1887f" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
         {/* Debris */}
         <mesh castShadow receiveShadow position={[-3, -1, 1]} rotation={[0.5, 0.5, 0]}>
            <boxGeometry args={[1, 1, 1]} />
-           <meshStandardMaterial color="#8d6e63" />
+           <meshPhysicalMaterial color="#8d6e63" clearcoat={0.1} clearcoatRoughness={0.8} />
         </mesh>
       </RigidBody>
 

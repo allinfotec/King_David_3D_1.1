@@ -33,6 +33,9 @@ function Impact({ position, createdAt, id, type }: { position: [number, number, 
   }, [type]);
 
   useFrame(() => {
+    const { isPaused, health } = useStore.getState();
+    if (isPaused || health <= 0) return;
+
     const age = Date.now() - createdAt;
     if (age > LIFETIME) {
       removeEffect(id);

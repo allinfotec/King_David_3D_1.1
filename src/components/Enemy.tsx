@@ -106,7 +106,8 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   }, [isDead, isStaggered, isDodgingEnemy, isBlocking]);
 
   useFrame((clockState, delta) => {
-    if (!rigidBody.current || !playerRef.current || isPaused) return;
+    const { health: playerHealth } = useStore.getState();
+    if (!rigidBody.current || !playerRef.current || isPaused || playerHealth <= 0) return;
 
     if (isDead) {
       if (group.current) {
@@ -379,7 +380,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
            {/* Main Body - Muscular */}
           <mesh castShadow position={[0, 0.1, 0.1]} rotation={[Math.PI / 2, 0, 0]}>
             <capsuleGeometry args={type === 'bear' ? [0.45, 1.0, 16, 32] : type === 'lion' ? [0.35, 1.1, 16, 32] : [0.35, 0.9, 8, 16]} />
-            <meshStandardMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.9} />
+            <meshPhysicalMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.9} />
           </mesh>
           
           {/* Fur/Mane - Spiky and dark */}
@@ -388,18 +389,18 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                {/* Main Mane */}
                <mesh>
                  <torusGeometry args={[0.38, 0.25, 16, 32]} />
-                 <meshStandardMaterial color={MANE_COLOR} roughness={1} />
+                 <meshPhysicalMaterial color={MANE_COLOR} roughness={1} />
                </mesh>
                {/* Secondary Mane layer for volume */}
                <mesh position={[0, 0, -0.15]} scale={1.1}>
                  <torusGeometry args={[0.35, 0.2, 16, 32]} />
-                 <meshStandardMaterial color={MANE_COLOR} roughness={1} />
+                 <meshPhysicalMaterial color={MANE_COLOR} roughness={1} />
                </mesh>
                {/* Spiky bits of mane */}
                {[...Array(8)].map((_, i) => (
                  <mesh key={i} position={[Math.cos(i * Math.PI / 4) * 0.4, Math.sin(i * Math.PI / 4) * 0.4, 0]} rotation={[0, 0, i * Math.PI / 4]}>
                    <coneGeometry args={[0.1, 0.3, 4]} />
-                   <meshStandardMaterial color={MANE_COLOR} roughness={1} />
+                   <meshPhysicalMaterial color={MANE_COLOR} roughness={1} />
                  </mesh>
                ))}
             </group>
@@ -408,36 +409,36 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
               {/* Bear Ears */}
               <mesh position={[0.25, 0.6, 0.5]}>
                 <sphereGeometry args={[0.12, 16, 16]} />
-                <meshStandardMaterial color={BODY_COLOR} roughness={0.9} />
+                <meshPhysicalMaterial color={BODY_COLOR} roughness={0.9} />
               </mesh>
               <mesh position={[-0.25, 0.6, 0.5]}>
                 <sphereGeometry args={[0.12, 16, 16]} />
-                <meshStandardMaterial color={BODY_COLOR} roughness={0.9} />
+                <meshPhysicalMaterial color={BODY_COLOR} roughness={0.9} />
               </mesh>
               {/* Hump */}
               <mesh position={[0, 0.55, 0.1]}>
                 <sphereGeometry args={[0.3, 16, 16]} />
-                <meshStandardMaterial color={BODY_COLOR} roughness={0.9} />
+                <meshPhysicalMaterial color={BODY_COLOR} roughness={0.9} />
               </mesh>
               {/* Thicker Neck */}
               <mesh position={[0, 0.3, 0.4]} rotation={[Math.PI / 4, 0, 0]}>
                 <cylinderGeometry args={[0.35, 0.4, 0.5, 16]} />
-                <meshStandardMaterial color={BODY_COLOR} roughness={0.9} />
+                <meshPhysicalMaterial color={BODY_COLOR} roughness={0.9} />
               </mesh>
             </>
           ) : (
             <>
               <mesh position={[0, 0.45, -0.3]} rotation={[-0.5, 0, 0]}>
                  <coneGeometry args={[0.15, 0.5, 8]} />
-                 <meshStandardMaterial color={MANE_COLOR} />
+                 <meshPhysicalMaterial color={MANE_COLOR} />
               </mesh>
               <mesh position={[0, 0.45, 0]} rotation={[-0.3, 0, 0]}>
                  <coneGeometry args={[0.15, 0.5, 8]} />
-                 <meshStandardMaterial color={MANE_COLOR} />
+                 <meshPhysicalMaterial color={MANE_COLOR} />
               </mesh>
               <mesh position={[0, 0.45, 0.3]} rotation={[-0.1, 0, 0]}>
                  <coneGeometry args={[0.15, 0.5, 8]} />
-                 <meshStandardMaterial color={MANE_COLOR} />
+                 <meshPhysicalMaterial color={MANE_COLOR} />
               </mesh>
             </>
           )}
@@ -446,45 +447,45 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           <group position={[0, 0.4, 0.7]}>
             <mesh castShadow>
               <boxGeometry args={type === 'bear' ? [0.55, 0.5, 0.6] : type === 'lion' ? [0.45, 0.55, 0.65] : [0.45, 0.5, 0.6]} />
-              <meshStandardMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.9} />
+              <meshPhysicalMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.9} />
             </mesh>
             
             {/* Glowing Eyes - Angled */}
             <mesh position={[0.18, 0.1, 0.25]} rotation={[0, -0.2, 0]}>
               <sphereGeometry args={[0.08, 16, 16]} />
-              <meshStandardMaterial color={EYE_COLOR} emissive={EYE_COLOR} emissiveIntensity={4} />
+              <meshPhysicalMaterial color={EYE_COLOR} emissive={EYE_COLOR} emissiveIntensity={4} />
             </mesh>
             <mesh position={[-0.18, 0.1, 0.25]} rotation={[0, 0.2, 0]}>
               <sphereGeometry args={[0.08, 16, 16]} />
-              <meshStandardMaterial color={EYE_COLOR} emissive={EYE_COLOR} emissiveIntensity={4} />
+              <meshPhysicalMaterial color={EYE_COLOR} emissive={EYE_COLOR} emissiveIntensity={4} />
             </mesh>
             
             {/* Brow Ridge */}
              <mesh position={[0, 0.25, 0.28]} rotation={[0.2, 0, 0]}>
                <boxGeometry args={type === 'bear' ? [0.6, 0.15, 0.2] : [0.5, 0.1, 0.2]} />
-               <meshStandardMaterial color={MANE_COLOR} roughness={0.9} />
+               <meshPhysicalMaterial color={MANE_COLOR} roughness={0.9} />
              </mesh>
 
             {/* Snout & Teeth - Longer and sharper */}
             <mesh castShadow position={[0, -0.1, 0.5]}>
               <boxGeometry args={type === 'bear' ? [0.35, 0.3, 0.5] : type === 'lion' ? [0.3, 0.25, 0.6] : [0.28, 0.25, 0.5]} />
-              <meshStandardMaterial color={type === 'bear' ? BODY_COLOR : MANE_COLOR} roughness={0.9} />
+              <meshPhysicalMaterial color={type === 'bear' ? BODY_COLOR : MANE_COLOR} roughness={0.9} />
             </mesh>
             
             {/* Nose */}
             <mesh position={[0, 0.05, type === 'lion' ? 0.8 : 0.75]}>
               <sphereGeometry args={[0.06, 8, 8]} />
-              <meshStandardMaterial color="#111" roughness={0.5} />
+              <meshPhysicalMaterial color="#111" roughness={0.5} />
             </mesh>
             
             {/* Fangs */}
             <mesh position={[0.1, -0.25, 0.6]} rotation={[Math.PI, 0, 0]}>
                <coneGeometry args={type === 'bear' ? [0.05, 0.15, 8] : type === 'lion' ? [0.04, 0.2, 8] : [0.04, 0.15, 8]} />
-               <meshStandardMaterial color="#ffffee" roughness={0.2} />
+               <meshPhysicalMaterial color="#ffffee" roughness={0.2} />
             </mesh>
             <mesh position={[-0.1, -0.25, 0.6]} rotation={[Math.PI, 0, 0]}>
                <coneGeometry args={type === 'bear' ? [0.05, 0.15, 8] : type === 'lion' ? [0.04, 0.2, 8] : [0.04, 0.15, 8]} />
-               <meshStandardMaterial color="#ffffee" roughness={0.2} />
+               <meshPhysicalMaterial color="#ffffee" roughness={0.2} />
             </mesh>
 
             {/* Ears */}
@@ -492,11 +493,11 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
               <>
                 <mesh position={[0.2, 0.35, -0.1]} rotation={[-0.2, 0, 0.2]}>
                   <coneGeometry args={[0.1, 0.35, 8]} />
-                  <meshStandardMaterial color={BODY_COLOR} />
+                  <meshPhysicalMaterial color={BODY_COLOR} />
                 </mesh>
                 <mesh position={[-0.2, 0.35, -0.1]} rotation={[-0.2, 0, -0.2]}>
                   <coneGeometry args={[0.1, 0.35, 8]} />
-                  <meshStandardMaterial color={BODY_COLOR} />
+                  <meshPhysicalMaterial color={BODY_COLOR} />
                 </mesh>
               </>
             )}
@@ -504,11 +505,11 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
               <>
                 <mesh position={[0.25, 0.25, -0.1]} rotation={[-0.2, 0, 0.2]}>
                   <sphereGeometry args={[0.1, 8, 8]} />
-                  <meshStandardMaterial color={BODY_COLOR} />
+                  <meshPhysicalMaterial color={BODY_COLOR} />
                 </mesh>
                 <mesh position={[-0.25, 0.25, -0.1]} rotation={[-0.2, 0, -0.2]}>
                   <sphereGeometry args={[0.1, 8, 8]} />
-                  <meshStandardMaterial color={BODY_COLOR} />
+                  <meshPhysicalMaterial color={BODY_COLOR} />
                 </mesh>
               </>
             )}
@@ -518,19 +519,19 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           <group>
               <mesh position={[0.25, -0.4, 0.4]} rotation={[0.2, 0, 0]}>
                  <cylinderGeometry args={[0.08, 0.06, 0.7, 8]} />
-                 <meshStandardMaterial color={BODY_COLOR} />
+                 <meshPhysicalMaterial color={BODY_COLOR} />
               </mesh>
               <mesh position={[-0.25, -0.4, 0.4]} rotation={[0.2, 0, 0]}>
                  <cylinderGeometry args={[0.08, 0.06, 0.7, 8]} />
-                 <meshStandardMaterial color={BODY_COLOR} />
+                 <meshPhysicalMaterial color={BODY_COLOR} />
               </mesh>
               <mesh position={[0.25, -0.4, -0.4]} rotation={[-0.2, 0, 0]}>
                  <cylinderGeometry args={[0.08, 0.06, 0.7, 8]} />
-                 <meshStandardMaterial color={BODY_COLOR} />
+                 <meshPhysicalMaterial color={BODY_COLOR} />
               </mesh>
               <mesh position={[-0.25, -0.4, -0.4]} rotation={[-0.2, 0, 0]}>
                  <cylinderGeometry args={[0.08, 0.06, 0.7, 8]} />
-                 <meshStandardMaterial color={BODY_COLOR} />
+                 <meshPhysicalMaterial color={BODY_COLOR} />
               </mesh>
           </group>
           
@@ -538,23 +539,23 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           {type === 'wolf' && (
             <mesh position={[0, 0.2, -0.6]} rotation={[-0.4, 0, 0]}>
                <cylinderGeometry args={[0.1, 0.02, 0.8, 8]} />
-               <meshStandardMaterial color={BODY_COLOR} />
+               <meshPhysicalMaterial color={BODY_COLOR} />
             </mesh>
           )}
           {type === 'lion' && (
             <group position={[0, 0.2, -0.6]} rotation={[-0.4, 0, 0]}>
                <cylinderGeometry args={[0.03, 0.03, 0.8, 8]} />
-               <meshStandardMaterial color={BODY_COLOR} />
+               <meshPhysicalMaterial color={BODY_COLOR} />
                <mesh position={[0, -0.4, 0]}>
                  <sphereGeometry args={[0.08, 8, 8]} />
-                 <meshStandardMaterial color={MANE_COLOR} />
+                 <meshPhysicalMaterial color={MANE_COLOR} />
                </mesh>
             </group>
           )}
           {type === 'bear' && (
             <mesh position={[0, 0.2, -0.4]} rotation={[-0.4, 0, 0]}>
                <sphereGeometry args={[0.15, 8, 8]} />
-               <meshStandardMaterial color={BODY_COLOR} />
+               <meshPhysicalMaterial color={BODY_COLOR} />
             </mesh>
           )}
         </group>

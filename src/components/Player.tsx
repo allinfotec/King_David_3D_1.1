@@ -16,7 +16,7 @@ export const playerRef = createRef<RapierRigidBody>();
 export function Player() {
   const { camera, scene } = useThree();
   const [lastShot, setLastShot] = useState(0);
-  const { isPaused, shootStone, damageEnemy, addEffect, setDodging } = useStore();
+  const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health } = useStore();
   const playerMesh = useRef<THREE.Group>(null);
   const [weapon, setWeapon] = useState<'sling' | 'knife'>('sling');
   const [isAttacking, setIsAttacking] = useState(false);
@@ -32,6 +32,7 @@ export function Player() {
   });
   
   const joystick = useRef({ x: 0, y: 0 });
+  const aimJoystick = useRef({ x: 0, y: 0 });
   const [lastDash, setLastDash] = useState(0);
   const DASH_COOLDOWN = 1000;
   const DASH_FORCE = 25; // Increased slightly
@@ -43,7 +44,7 @@ export function Player() {
   const lastJumpPressedTime = useRef(0);
 
   const performJump = (force: number) => {
-      if (!playerRef.current) return;
+      if (!playerRef.current || health <= 0) return;
       const vel = playerRef.current.linvel();
       playerRef.current.setLinvel({ x: vel.x, y: force, z: vel.z }, true);
       
@@ -67,6 +68,7 @@ export function Player() {
   // Input handlers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (useStore.getState().health <= 0) return;
       switch (e.code) {
         case 'KeyW': keys.current.forward = true; break;
         case 'KeyS': keys.current.backward = true; break;
@@ -85,7 +87,7 @@ export function Player() {
     };
 
     const performJump = (force: number) => {
-        if (!playerRef.current) return;
+        if (!playerRef.current || useStore.getState().health <= 0) return;
         const vel = playerRef.current.linvel();
         playerRef.current.setLinvel({ x: vel.x, y: force, z: vel.z }, true);
         
@@ -120,21 +122,30 @@ export function Player() {
     };
     
     const handleJoystickMove = (e: CustomEvent) => {
+        if (useStore.getState().health <= 0) return;
         joystick.current = e.detail;
     };
 
+    const handleAimJoystickMove = (e: CustomEvent) => {
+        if (useStore.getState().health <= 0) return;
+        aimJoystick.current = e.detail;
+    };
+
     const handleDash = () => {
+        if (useStore.getState().health <= 0) return;
         keys.current.dash = true;
         setTimeout(() => keys.current.dash = false, 100);
     };
     
     const handleWeaponSelect = (e: CustomEvent) => {
+        if (useStore.getState().health <= 0) return;
         setWeapon(e.detail);
     };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('joystickMove', handleJoystickMove as EventListener);
+    window.addEventListener('aimJoystickMove', handleAimJoystickMove as EventListener);
     window.addEventListener('dash', handleDash);
     window.addEventListener('weaponSelect', handleWeaponSelect as EventListener);
     
@@ -142,6 +153,7 @@ export function Player() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('joystickMove', handleJoystickMove as EventListener);
+      window.removeEventListener('aimJoystickMove', handleAimJoystickMove as EventListener);
       window.removeEventListener('dash', handleDash);
       window.removeEventListener('weaponSelect', handleWeaponSelect as EventListener);
     };
@@ -160,7 +172,7 @@ export function Player() {
   // Attack handler
   useEffect(() => {
     const triggerAttack = (type: 'sling' | 'knife') => {
-      if (isPaused || isAttacking) return;
+      if (isPaused || isAttacking || health <= 0) return;
       
       const now = Date.now();
       
@@ -315,7 +327,7 @@ export function Player() {
   });
 
   useFrame((state, delta) => {
-    if (!playerRef.current || isPaused) return;
+    if (!playerRef.current || isPaused || health <= 0) return;
 
     // Weapon scale animation
     if (slingRef.current) {
@@ -351,6 +363,15 @@ export function Player() {
     let gpForward = 0;
     let gpSide = 0;
     
+    if (aimJoystick.current.x !== 0 || aimJoystick.current.y !== 0) {
+        const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        euler.setFromQuaternion(camera.quaternion);
+        euler.y -= aimJoystick.current.x * 0.05;
+        euler.x -= aimJoystick.current.y * 0.05;
+        euler.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, euler.x));
+        camera.quaternion.setFromEuler(euler);
+    }
+
     if (gp) {
         // Left stick for movement
         if (Math.abs(gp.axes[1]) > 0.1) gpForward = gp.axes[1];
@@ -687,73 +708,73 @@ export function Player() {
           {/* Tunic (Body) - Better shape */}
           <mesh castShadow position={[0, 0.6, 0]}>
           <cylinderGeometry args={[0.28, 0.42, 1.2, 32]} /> {/* Increased segments */}
-          <meshStandardMaterial color="#e3dac9" roughness={0.9} />
+          <meshPhysicalMaterial color="#e3dac9" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.4} />
         </mesh>
         
         {/* Tunic Folds (Details) */}
         <mesh position={[0, 0.6, 0.28]} rotation={[0, 0, 0]}>
             <cylinderGeometry args={[0.02, 0.05, 1.1, 8]} />
-            <meshStandardMaterial color="#d4cbb8" roughness={1} />
+            <meshPhysicalMaterial color="#d4cbb8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
         </mesh>
         <mesh position={[0.15, 0.6, 0.25]} rotation={[0, 0, 0.1]}>
             <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
-            <meshStandardMaterial color="#d4cbb8" roughness={1} />
+            <meshPhysicalMaterial color="#d4cbb8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
         </mesh>
         <mesh position={[-0.15, 0.6, 0.25]} rotation={[0, 0, -0.1]}>
             <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
-            <meshStandardMaterial color="#d4cbb8" roughness={1} />
+            <meshPhysicalMaterial color="#d4cbb8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
         </mesh>
 
         {/* Scarf / Shawl */}
         <mesh position={[0, 1.15, 0]} rotation={[0.1, 0, 0]}>
              <torusGeometry args={[0.3, 0.08, 16, 32]} />
-             <meshStandardMaterial color="#8D6E63" roughness={0.8} />
+             <meshPhysicalMaterial color="#8D6E63" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.6} />
         </mesh>
         {/* Scarf tail */}
         <mesh position={[0.2, 0.9, -0.25]} rotation={[-0.5, 0, -0.2]}>
              <capsuleGeometry args={[0.06, 0.4, 8, 16]} />
-             <meshStandardMaterial color="#8D6E63" roughness={0.8} />
+             <meshPhysicalMaterial color="#8D6E63" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.6} />
         </mesh>
 
         {/* Bag Strap */}
         <mesh position={[0, 0.7, 0]} rotation={[0, 0, -0.8]} scale={[1, 1, 1.2]}>
              <torusGeometry args={[0.32, 0.03, 8, 32]} />
-             <meshStandardMaterial color="#3E2723" />
+             <meshPhysicalMaterial color="#3E2723" clearcoat={0.3} clearcoatRoughness={0.5} />
         </mesh>
         
         {/* Shepherd's Bag */}
         <group position={[0.28, 0.4, 0.2]} rotation={[0, 0, -0.2]}>
             <mesh castShadow>
                  <boxGeometry args={[0.25, 0.3, 0.15]} />
-                 <meshStandardMaterial color="#5D4037" roughness={0.9} />
+                 <meshPhysicalMaterial color="#5D4037" roughness={0.9} clearcoat={0.3} clearcoatRoughness={0.5} />
             </mesh>
             {/* Bag Flap */}
             <mesh position={[0, 0.15, 0.08]} rotation={[0.2, 0, 0]}>
                  <boxGeometry args={[0.26, 0.15, 0.02]} />
-                 <meshStandardMaterial color="#4E342E" roughness={0.9} />
+                 <meshPhysicalMaterial color="#4E342E" roughness={0.9} clearcoat={0.3} clearcoatRoughness={0.5} />
             </mesh>
             {/* Bag Button */}
             <mesh position={[0, 0.08, 0.09]} rotation={[Math.PI/2, 0, 0]}>
                  <cylinderGeometry args={[0.03, 0.03, 0.02, 16]} />
-                 <meshStandardMaterial color="#FFD700" metalness={0.6} roughness={0.4} />
+                 <meshPhysicalMaterial color="#FFD700" metalness={0.6} roughness={0.4} clearcoat={1.0} clearcoatRoughness={0.1} />
             </mesh>
         </group>
         
         {/* Belt/Sash - Detailed */}
         <mesh castShadow position={[0, 0.6, 0]} scale={[1.05, 1, 1.05]}>
           <cylinderGeometry args={[0.3, 0.4, 0.25, 32]} />
-          <meshStandardMaterial color="#8b4513" roughness={0.8} />
+          <meshPhysicalMaterial color="#8b4513" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.5} />
         </mesh>
         {/* Belt Buckle/Knot */}
         <mesh position={[0.2, 0.5, 0.28]} rotation={[0, 0, -0.2]}>
            <boxGeometry args={[0.12, 0.35, 0.06]} />
-           <meshStandardMaterial color="#8b4513" roughness={0.8} />
+           <meshPhysicalMaterial color="#8b4513" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.5} />
         </mesh>
 
         {/* Head */}
         <mesh castShadow position={[0, 1.4, 0]}>
           <sphereGeometry args={[0.26, 32, 32]} /> {/* Higher res sphere */}
-          <meshStandardMaterial color="#ffcd94" roughness={0.4} />
+          <meshPhysicalMaterial color="#ffcd94" roughness={0.4} clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
         </mesh>
 
         {/* Face Details */}
@@ -761,54 +782,54 @@ export function Player() {
           {/* Eyes */}
           <mesh position={[0.09, 0.05, 0]}>
             <sphereGeometry args={[0.035, 16, 16]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.2} />
+            <meshPhysicalMaterial color="#1a1a1a" roughness={0.2} clearcoat={1.0} clearcoatRoughness={0.0} />
           </mesh>
           {/* Eye highlights */}
           <mesh position={[0.1, 0.06, -0.03]}>
             <sphereGeometry args={[0.01, 8, 8]} />
-            <meshStandardMaterial color="#ffffff" />
+            <meshPhysicalMaterial color="#ffffff" clearcoat={1.0} clearcoatRoughness={0.0} />
           </mesh>
           
           <mesh position={[-0.09, 0.05, 0]}>
             <sphereGeometry args={[0.035, 16, 16]} />
-            <meshStandardMaterial color="#1a1a1a" roughness={0.2} />
+            <meshPhysicalMaterial color="#1a1a1a" roughness={0.2} clearcoat={1.0} clearcoatRoughness={0.0} />
           </mesh>
           {/* Eye highlights */}
           <mesh position={[-0.08, 0.06, -0.03]}>
             <sphereGeometry args={[0.01, 8, 8]} />
-            <meshStandardMaterial color="#ffffff" />
+            <meshPhysicalMaterial color="#ffffff" clearcoat={1.0} clearcoatRoughness={0.0} />
           </mesh>
 
           {/* Eyebrows */}
           <mesh position={[0.09, 0.13, -0.01]} rotation={[0, 0, -0.1]}>
              <boxGeometry args={[0.09, 0.025, 0.01]} />
-             <meshStandardMaterial color="#5C3A21" /> 
+             <meshPhysicalMaterial color="#5C3A21" clearcoat={0.1} clearcoatRoughness={0.8} /> 
           </mesh>
           <mesh position={[-0.09, 0.13, -0.01]} rotation={[0, 0, 0.1]}>
              <boxGeometry args={[0.09, 0.025, 0.01]} />
-             <meshStandardMaterial color="#5C3A21" /> 
+             <meshPhysicalMaterial color="#5C3A21" clearcoat={0.1} clearcoatRoughness={0.8} /> 
           </mesh>
           
           {/* Nose */}
           <mesh position={[0, 0, -0.06]} rotation={[-0.2, 0, 0]}>
              <capsuleGeometry args={[0.025, 0.08, 8, 8]} />
-             <meshStandardMaterial color="#f0b87d" />
+             <meshPhysicalMaterial color="#f0b87d" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
           </mesh>
           
           {/* Ears */}
           <mesh position={[0.25, 0.05, 0.15]} rotation={[0, 0.3, 0]}>
               <sphereGeometry args={[0.04, 16, 16]} />
-              <meshStandardMaterial color="#ffcd94" />
+              <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
           </mesh>
           <mesh position={[-0.25, 0.05, 0.15]} rotation={[0, -0.3, 0]}>
               <sphereGeometry args={[0.04, 16, 16]} />
-              <meshStandardMaterial color="#ffcd94" />
+              <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
           </mesh>
 
           {/* Mouth/Smile */}
           <mesh position={[0, -0.08, -0.03]} rotation={[0.1 + Math.PI, 0, 0]}>
               <torusGeometry args={[0.04, 0.01, 8, 16, Math.PI]} />
-              <meshStandardMaterial color="#cc7a6f" />
+              <meshPhysicalMaterial color="#cc7a6f" clearcoat={0.2} clearcoatRoughness={0.2} />
           </mesh>
 
           {/* Beard (Removed for young David, kept clean shaven) */}
@@ -819,13 +840,13 @@ export function Player() {
           {/* Base Hair */}
           <mesh castShadow position={[0, 0.05, 0.05]}>
             <sphereGeometry args={[0.27, 32, 32, 0, Math.PI * 2, 0, Math.PI / 1.7]} />
-            <meshStandardMaterial color="#5C3A21" roughness={0.9} /> 
+            <meshPhysicalMaterial color="#5C3A21" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} /> 
           </mesh>
           
           {/* Headband */}
           <mesh position={[0, 0.02, 0]} rotation={[-0.1, 0, 0]}>
               <torusGeometry args={[0.265, 0.02, 16, 32]} />
-              <meshStandardMaterial color="#8b4513" />
+              <meshPhysicalMaterial color="#8b4513" clearcoat={0.2} clearcoatRoughness={0.5} />
           </mesh>
 
           {/* Curls/Messy bits */}
@@ -840,18 +861,18 @@ export function Player() {
                   rotation={[Math.random(), Math.random(), Math.random()]}
               >
                  <sphereGeometry args={[0.06 + Math.random() * 0.04, 16, 16]} />
-                 <meshStandardMaterial color="#5C3A21" roughness={0.9} />
+                 <meshPhysicalMaterial color="#5C3A21" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
               </mesh>
           ))}
           
           {/* Front bangs */}
           <mesh position={[0.1, -0.05, -0.22]} rotation={[0.2, 0, -0.2]}>
               <capsuleGeometry args={[0.04, 0.1, 8, 8]} />
-              <meshStandardMaterial color="#5C3A21" roughness={0.9} />
+              <meshPhysicalMaterial color="#5C3A21" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
           </mesh>
           <mesh position={[-0.1, -0.08, -0.22]} rotation={[0.2, 0, 0.3]}>
               <capsuleGeometry args={[0.03, 0.12, 8, 8]} />
-              <meshStandardMaterial color="#5C3A21" roughness={0.9} />
+              <meshPhysicalMaterial color="#5C3A21" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
           </mesh>
         </group>
 
@@ -860,17 +881,17 @@ export function Player() {
             {/* Sleeve */}
             <mesh castShadow position={[0, -0.15, 0]}>
                 <cylinderGeometry args={[0.1, 0.09, 0.3, 16]} />
-                <meshStandardMaterial color="#e3dac9" roughness={0.9} />
+                <meshPhysicalMaterial color="#e3dac9" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.4} />
             </mesh>
             {/* Arm */}
             <mesh castShadow position={[0, -0.35, 0]}>
                 <capsuleGeometry args={[0.07, 0.5, 16, 16]} />
-                <meshStandardMaterial color="#ffcd94" />
+                <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
             </mesh>
             {/* Hand */}
             <mesh castShadow position={[0, -0.65, 0]}>
                 <sphereGeometry args={[0.08, 16, 16]} />
-                <meshStandardMaterial color="#ffcd94" />
+                <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
             </mesh>
         </group>
         
@@ -878,17 +899,17 @@ export function Player() {
             {/* Sleeve */}
             <mesh castShadow position={[0, -0.15, 0]}>
                 <cylinderGeometry args={[0.1, 0.09, 0.3, 16]} />
-                <meshStandardMaterial color="#e3dac9" roughness={0.9} />
+                <meshPhysicalMaterial color="#e3dac9" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.4} />
             </mesh>
             {/* Arm */}
             <mesh castShadow position={[0, -0.35, 0]}>
                 <capsuleGeometry args={[0.07, 0.5, 16, 16]} />
-                <meshStandardMaterial color="#ffcd94" />
+                <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
             </mesh>
             {/* Hand */}
             <mesh castShadow position={[0, -0.65, 0]}>
                 <sphereGeometry args={[0.08, 16, 16]} />
-                <meshStandardMaterial color="#ffcd94" />
+                <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
             </mesh>
             
             {/* Weapon: Sling (Attached to Right Arm) */}
@@ -896,17 +917,17 @@ export function Player() {
                {/* Main Leather Strip */}
                <mesh>
                  <boxGeometry args={[0.05, 0.6, 0.02]} />
-                 <meshStandardMaterial color="#5c4033" />
+                 <meshPhysicalMaterial color="#5c4033" clearcoat={0.2} clearcoatRoughness={0.5} />
                </mesh>
                {/* Pouch */}
                <mesh position={[0, -0.3, 0]}>
                  <sphereGeometry args={[0.08, 16, 16]} />
-                 <meshStandardMaterial color="#3e2723" />
+                 <meshPhysicalMaterial color="#3e2723" clearcoat={0.3} clearcoatRoughness={0.5} />
                </mesh>
                {/* Wrist Strap */}
                <mesh position={[0, 0.25, -0.05]} rotation={[0.2, 0, 0]}>
                   <boxGeometry args={[0.04, 0.3, 0.01]} />
-                  <meshStandardMaterial color="#4e342e" />
+                  <meshPhysicalMaterial color="#4e342e" clearcoat={0.3} clearcoatRoughness={0.5} />
                </mesh>
             </group>
     
@@ -915,17 +936,17 @@ export function Player() {
                {/* Handle */}
                <mesh position={[0, -0.1, 0]}>
                  <cylinderGeometry args={[0.03, 0.04, 0.2, 16]} />
-                 <meshStandardMaterial color="#3e2723" />
+                 <meshPhysicalMaterial color="#3e2723" clearcoat={0.3} clearcoatRoughness={0.5} />
                </mesh>
                {/* Guard */}
                <mesh position={[0, 0, 0]}>
                  <boxGeometry args={[0.12, 0.02, 0.04]} />
-                 <meshStandardMaterial color="#cfd8dc" metalness={0.8} roughness={0.2} />
+                 <meshPhysicalMaterial color="#cfd8dc" metalness={0.8} roughness={0.2} clearcoat={1.0} clearcoatRoughness={0.1} />
                </mesh>
                {/* Blade */}
                <mesh position={[0, 0.15, 0]}>
                  <boxGeometry args={[0.05, 0.3, 0.01]} />
-                 <meshStandardMaterial color="#cfd8dc" metalness={0.8} roughness={0.2} />
+                 <meshPhysicalMaterial color="#cfd8dc" metalness={0.8} roughness={0.2} clearcoat={1.0} clearcoatRoughness={0.1} />
                </mesh>
             </group>
         </group>
@@ -935,31 +956,31 @@ export function Player() {
             {/* Leg */}
             <mesh castShadow position={[0, -0.4, 0]}>
                 <capsuleGeometry args={[0.08, 0.7, 16, 16]} />
-                <meshStandardMaterial color="#ffcd94" />
+                <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
             </mesh>
             {/* Foot */}
             <mesh castShadow position={[0, -0.8, 0.05]}>
                 <boxGeometry args={[0.1, 0.08, 0.22]} />
-                <meshStandardMaterial color="#ffcd94" />
+                <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
             </mesh>
             {/* Sandal Sole */}
             <mesh castShadow position={[0, -0.84, 0.05]}>
                 <boxGeometry args={[0.12, 0.02, 0.25]} />
-                <meshStandardMaterial color="#5c4033" />
+                <meshPhysicalMaterial color="#5c4033" clearcoat={0.2} clearcoatRoughness={0.5} />
             </mesh>
             {/* Sandal Straps */}
             <mesh position={[0, -0.75, 0.08]} rotation={[0.2, 0, 0]}>
                 <boxGeometry args={[0.11, 0.02, 0.02]} />
-                <meshStandardMaterial color="#3E2723" />
+                <meshPhysicalMaterial color="#3E2723" clearcoat={0.3} clearcoatRoughness={0.5} />
             </mesh>
             <mesh position={[0, -0.7, 0.06]} rotation={[0.2, 0, 0]}>
                 <boxGeometry args={[0.11, 0.02, 0.02]} />
-                <meshStandardMaterial color="#3E2723" />
+                <meshPhysicalMaterial color="#3E2723" clearcoat={0.3} clearcoatRoughness={0.5} />
             </mesh>
             {/* Cross strap */}
             <mesh position={[0, -0.78, 0.02]} rotation={[0.5, 0.5, 0]}>
                 <boxGeometry args={[0.11, 0.02, 0.02]} />
-                <meshStandardMaterial color="#3E2723" />
+                <meshPhysicalMaterial color="#3E2723" clearcoat={0.3} clearcoatRoughness={0.5} />
             </mesh>
         </group>
 
@@ -967,31 +988,31 @@ export function Player() {
             {/* Leg */}
             <mesh castShadow position={[0, -0.4, 0]}>
                 <capsuleGeometry args={[0.08, 0.7, 16, 16]} />
-                <meshStandardMaterial color="#ffcd94" />
+                <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
             </mesh>
             {/* Foot */}
             <mesh castShadow position={[0, -0.8, 0.05]}>
                 <boxGeometry args={[0.1, 0.08, 0.22]} />
-                <meshStandardMaterial color="#ffcd94" />
+                <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
             </mesh>
             {/* Sandal Sole */}
             <mesh castShadow position={[0, -0.84, 0.05]}>
                 <boxGeometry args={[0.12, 0.02, 0.25]} />
-                <meshStandardMaterial color="#5c4033" />
+                <meshPhysicalMaterial color="#5c4033" clearcoat={0.2} clearcoatRoughness={0.5} />
             </mesh>
             {/* Sandal Straps */}
             <mesh position={[0, -0.75, 0.08]} rotation={[0.2, 0, 0]}>
                 <boxGeometry args={[0.11, 0.02, 0.02]} />
-                <meshStandardMaterial color="#3E2723" />
+                <meshPhysicalMaterial color="#3E2723" clearcoat={0.3} clearcoatRoughness={0.5} />
             </mesh>
             <mesh position={[0, -0.7, 0.06]} rotation={[0.2, 0, 0]}>
                 <boxGeometry args={[0.11, 0.02, 0.02]} />
-                <meshStandardMaterial color="#3E2723" />
+                <meshPhysicalMaterial color="#3E2723" clearcoat={0.3} clearcoatRoughness={0.5} />
             </mesh>
             {/* Cross strap */}
             <mesh position={[0, -0.78, 0.02]} rotation={[0.5, -0.5, 0]}>
                 <boxGeometry args={[0.11, 0.02, 0.02]} />
-                <meshStandardMaterial color="#3E2723" />
+                <meshPhysicalMaterial color="#3E2723" clearcoat={0.3} clearcoatRoughness={0.5} />
             </mesh>
         </group>
         </group>

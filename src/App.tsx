@@ -10,6 +10,7 @@ import { Enemy, enemyRefs } from './components/Enemy';
 import { Effects } from './components/Effects';
 import { useStore } from './store';
 import { Joystick } from './components/Joystick';
+import { AimJoystick } from './components/AimJoystick';
 import { Sword, RectangleVertical } from 'lucide-react';
 import { StoryScreen } from './components/StoryScreen';
 
@@ -17,6 +18,7 @@ function Spawner() {
   const spawnEnemy = useStore((state) => state.spawnEnemy);
   const enemies = useStore((state) => state.enemies);
   const isPaused = useStore((state) => state.isPaused);
+  const health = useStore((state) => state.health);
   const phase = useStore((state) => state.phase);
   const enemiesKilledInPhase = useStore((state) => state.enemiesKilledInPhase);
   const setPhaseMessage = useStore((state) => state.setPhaseMessage);
@@ -31,7 +33,7 @@ function Spawner() {
   });
 
   useFrame(({ clock }) => {
-    if (isPaused || isTransitioningPhase) return;
+    if (isPaused || isTransitioningPhase || health <= 0) return;
     
     const state = stateRef.current;
     
@@ -287,13 +289,13 @@ function UI() {
             </button>
             
             {/* Stone Weapon */}
-            <button
-            onPointerDown={() => triggerAttack('sling')}
-            className="w-18 h-18 p-3 rounded-xl border-2 flex flex-col items-center justify-center transition-all transform hover:scale-105 backdrop-blur-md bg-yellow-900/40 border-yellow-500 text-yellow-500 shadow-[0_0_15px_rgba(250,204,21,0.3)] active:bg-yellow-800/60"
-            >
-            <RectangleVertical size={28} strokeWidth={2.5} />
-            <span className="text-[10px] font-bold mt-1 tracking-wider">PEDRA</span>
-            </button>
+            <AimJoystick 
+              onAim={(x, y) => window.dispatchEvent(new CustomEvent('aimJoystickMove', { detail: { x, y } }))}
+              onAttack={() => triggerAttack('sling')}
+              icon={<RectangleVertical size={28} strokeWidth={2.5} />}
+              label="PEDRA"
+              colorClass="bg-yellow-900/40 border-yellow-500 text-yellow-500 shadow-[0_0_15px_rgba(250,204,21,0.3)]"
+            />
         </div>
 
         {/* Column 2: Jump above Knife */}
@@ -309,19 +311,21 @@ function UI() {
             </button>
 
             {/* Knife Weapon */}
-            <button
-            onPointerDown={() => triggerAttack('knife')}
-            className="w-18 h-18 p-3 rounded-xl border-2 flex flex-col items-center justify-center transition-all transform hover:scale-105 backdrop-blur-md bg-gray-100/20 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.3)] active:bg-gray-300/40"
-            >
-            <Sword size={28} strokeWidth={2.5} />
-            <span className="text-[10px] font-bold mt-1 tracking-wider">FACA</span>
-            </button>
+            <AimJoystick 
+              onAim={(x, y) => window.dispatchEvent(new CustomEvent('aimJoystickMove', { detail: { x, y } }))}
+              onAttack={() => triggerAttack('knife')}
+              icon={<Sword size={28} strokeWidth={2.5} />}
+              label="FACA"
+              colorClass="bg-gray-100/20 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.3)]"
+            />
         </div>
       </div>
       
       {/* Instructions */}
       <div className="absolute top-20 left-4 text-white/50 font-sans text-xs p-2 rounded pointer-events-none">
-        <p>WASD / Joystick para Mover</p>
+        <p>WASD / Joystick Esquerdo para Mover</p>
+        <p>Arraste a tela para Mirar</p>
+        <p>Arraste os botões de arma para Mirar e Atirar</p>
         <p>ESPAÇO / Botão para Pular</p>
         <p>SHIFT / Botão para Esquiva</p>
         <p>CLIQUE ESQUERDO para Faca</p>
@@ -332,6 +336,9 @@ function UI() {
 }
 
 function AmbientSound() {
+  const isPaused = useStore((state) => state.isPaused);
+  const health = useStore((state) => state.health);
+
   const [audio] = useState(() => {
     const a = new Audio('https://assets.mixkit.co/active_storage/sfx/246/246-preview.mp3'); // Desert wind howling
     a.loop = true;
@@ -340,23 +347,32 @@ function AmbientSound() {
   });
 
   useEffect(() => {
+    if (isPaused || health <= 0) {
+        audio.pause();
+        return;
+    }
+
     const playAudio = () => {
-        audio.play().catch(() => {
-            // Auto-play policy might block this until user interaction
-            const clickHandler = () => {
-                audio.play();
-                window.removeEventListener('click', clickHandler);
-                window.removeEventListener('keydown', clickHandler);
-            };
-            window.addEventListener('click', clickHandler);
-            window.addEventListener('keydown', clickHandler);
+        audio.play().catch((e) => {
+            if (e.name === 'NotAllowedError') {
+                // Auto-play policy might block this until user interaction
+                const clickHandler = () => {
+                    if (!useStore.getState().isPaused && useStore.getState().health > 0) {
+                        audio.play().catch(() => {});
+                    }
+                    window.removeEventListener('click', clickHandler);
+                    window.removeEventListener('keydown', clickHandler);
+                };
+                window.addEventListener('click', clickHandler);
+                window.addEventListener('keydown', clickHandler);
+            }
         });
     };
     playAudio();
     return () => {
         audio.pause();
     };
-  }, [audio]);
+  }, [audio, isPaused, health]);
 
   return null;
 }
@@ -364,11 +380,12 @@ function AmbientSound() {
 function TouchCameraControls() {
   const { camera, gl } = useThree();
   const isPaused = useStore((state) => state.isPaused);
+  const health = useStore((state) => state.health);
   const euler = useRef(new THREE.Euler(0, 0, 0, 'YXZ'));
   const previousTouch = useRef<{ x: number, y: number, id: number } | null>(null);
 
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || health <= 0) return;
 
     const onTouchStart = (e: TouchEvent) => {
       // Only track if we aren't already tracking a touch for the camera
@@ -447,6 +464,9 @@ function TargetManager() {
   const setTargetId = useStore((state) => state.setTargetId);
 
   useFrame(() => {
+    const { isPaused, health } = useStore.getState();
+    if (isPaused || health <= 0) return;
+
     if (!playerRef.current) return;
     const playerPos = playerRef.current.translation();
     const pVec = new THREE.Vector3(playerPos.x, playerPos.y, playerPos.z);
@@ -496,6 +516,9 @@ function TargetIndicator() {
   const wasVisible = useRef(false);
 
   useFrame((state, delta) => {
+    const { isPaused, health } = useStore.getState();
+    if (isPaused || health <= 0) return;
+
     if (!groupRef.current) return;
 
     if (targetId) {
@@ -578,9 +601,13 @@ function GameContent() {
   );
 }
 
+import { EffectComposer, Bloom, Vignette, Noise, DepthOfField } from '@react-three/postprocessing';
+import { Environment } from '@react-three/drei';
+
 export default function App() {
   const isPaused = useStore((state) => state.isPaused);
   const isStarted = useStore((state) => state.isStarted);
+  const health = useStore((state) => state.health);
 
   return (
     <div className="w-full h-screen bg-black">
@@ -588,8 +615,20 @@ export default function App() {
       
       {isStarted && (
         <>
-          <Canvas shadows camera={{ fov: 75 }}>
+          <Canvas 
+            shadows 
+            camera={{ fov: 75 }} 
+            dpr={[1, 2]} 
+            gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
+            onCreated={({ gl }) => {
+              gl.shadowMap.enabled = true;
+              gl.shadowMap.type = THREE.PCFSoftShadowMap;
+            }}
+          >
             <Suspense fallback={null}>
+              {/* Environment Map for realistic reflections on Physical Materials */}
+              <Environment preset="sunset" />
+              
               {/* Dramatic Sunset Sky */}
               <Sky 
                 sunPosition={[100, 10, 100]} 
@@ -629,11 +668,20 @@ export default function App() {
               {/* Rim light for characters */}
               <spotLight position={[-10, 10, -10]} angle={0.5} intensity={1.5} color="#88ccff" />
 
-              <Physics gravity={[0, -9.81, 0]} paused={isPaused}>
+              <Physics gravity={[0, -9.81, 0]} paused={isPaused || health <= 0}>
                 <GameContent />
               </Physics>
               
               <PointerLockControls />
+              <TouchCameraControls />
+              
+              {/* Post-processing effects */}
+              <EffectComposer disableNormalPass>
+                <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.9} height={300} intensity={0.8} />
+                <Noise opacity={0.025} />
+                <Vignette eskil={false} offset={0.1} darkness={1.1} />
+                <DepthOfField focusDistance={0} focalLength={0.02} bokehScale={2} height={480} />
+              </EffectComposer>
             </Suspense>
           </Canvas>
           <UI />
