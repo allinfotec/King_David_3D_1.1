@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 
 interface JoystickProps {
   onMove: (x: number, y: number) => void;
@@ -7,12 +7,17 @@ interface JoystickProps {
 
 export function Joystick({ onMove, onStop }: JoystickProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const knobRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const center = useRef({ x: 0, y: 0 });
+  const pointerId = useRef<number | null>(null);
 
-  const handleStart = (clientX: number, clientY: number) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (pointerId.current !== null) return; // Already active with another pointer
+    
+    e.currentTarget.setPointerCapture(e.pointerId);
+    pointerId.current = e.pointerId;
+    
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     center.current = {
@@ -20,7 +25,22 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
       y: rect.top + rect.height / 2,
     };
     setActive(true);
-    handleMove(clientX, clientY);
+    handleMove(e.clientX, e.clientY);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!active || e.pointerId !== pointerId.current) return;
+    handleMove(e.clientX, e.clientY);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerId !== pointerId.current) return;
+    
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    pointerId.current = null;
+    setActive(false);
+    setPosition({ x: 0, y: 0 });
+    onStop();
   };
 
   const handleMove = (clientX: number, clientY: number) => {
@@ -41,63 +61,20 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
     setPosition({ x, y });
     
     // Normalize output -1 to 1
-    // Invert Y because screen Y is down, but usually up is positive in games (or forward)
-    // Actually, let's keep standard screen coords: Y down is positive.
-    // In 3D: Forward is usually -Z. Backward is +Z.
-    // So Up on joystick (negative screen Y) should be Forward (positive movement value for calculation).
     onMove(x / maxDist, y / maxDist);
   };
-
-  const handleEnd = () => {
-    setActive(false);
-    setPosition({ x: 0, y: 0 });
-    onStop();
-  };
-
-  useEffect(() => {
-    const onTouchMove = (e: TouchEvent) => {
-      if (active) {
-        e.preventDefault(); // Prevent scrolling
-        handleMove(e.touches[0].clientX, e.touches[0].clientY);
-      }
-    };
-    const onTouchEnd = () => {
-      if (active) handleEnd();
-    };
-    
-    const onMouseMove = (e: MouseEvent) => {
-      if (active) handleMove(e.clientX, e.clientY);
-    };
-    const onMouseUp = () => {
-      if (active) handleEnd();
-    };
-
-    if (active) {
-      window.addEventListener('touchmove', onTouchMove, { passive: false });
-      window.addEventListener('touchend', onTouchEnd);
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', onMouseUp);
-    }
-
-    return () => {
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-  }, [active]);
 
   return (
     <div 
       ref={containerRef}
       className="relative w-32 h-32 bg-white/10 border-2 border-white/30 rounded-full backdrop-blur-sm touch-none"
-      onPointerDown={(e) => {
-        e.preventDefault();
-        handleStart(e.clientX, e.clientY);
-      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <div 
-        ref={knobRef}
         className="absolute w-12 h-12 bg-white/50 rounded-full shadow-lg pointer-events-none"
         style={{
           left: `calc(50% + ${position.x}px - 24px)`,
