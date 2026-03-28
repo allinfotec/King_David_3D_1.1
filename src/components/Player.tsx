@@ -15,6 +15,7 @@ export const playerRef = createRef<RapierRigidBody>();
 
 export function Player() {
   const { camera, scene } = useThree();
+  const { rapier, world } = useRapier();
   const [lastShot, setLastShot] = useState(0);
   const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health } = useStore();
   const playerMesh = useRef<THREE.Group>(null);
@@ -62,6 +63,31 @@ export function Player() {
                   playerMesh.current.scale.set(1, 1, 1);
               }
           }, 200);
+      }
+
+      // Play jump sound based on material
+      const playerPos = playerRef.current.translation();
+      const ray = new rapier.Ray(playerPos, { x: 0, y: -1, z: 0 });
+      const hit = world.castRay(ray, 2.0, true);
+      let material = 'grass';
+      if (hit && hit.collider) {
+          const rb = hit.collider.parent();
+          if (rb && rb.userData && (rb.userData as any).material) {
+              material = (rb.userData as any).material;
+          }
+      }
+      const sound = footstepSounds.current[material] || footstepSounds.current['grass'];
+      if (sound) {
+          sound.playbackRate = 1.2; // Higher pitch for jumping
+          sound.volume = 0.3;
+          sound.currentTime = 0;
+          sound.play().catch(() => {});
+          // Reset volume after
+          setTimeout(() => {
+              if (material === 'grass') sound.volume = 0.2;
+              else if (material === 'sand') sound.volume = 0.15;
+              else if (material === 'rock') sound.volume = 0.25;
+          }, 100);
       }
   };
 
@@ -161,12 +187,23 @@ export function Player() {
 
   const slingSound = useRef<HTMLAudioElement | null>(null);
   const knifeSound = useRef<HTMLAudioElement | null>(null);
+  const footstepSounds = useRef<{ [key: string]: HTMLAudioElement }>({});
+  const lastFootstepTime = useRef(0);
 
   useEffect(() => {
-    slingSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2065/2065-preview.mp3');
+    slingSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2067/2067-preview.mp3');
     slingSound.current.volume = 0.5;
-    knifeSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2951/2951-preview.mp3');
+    knifeSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2952/2952-preview.mp3');
     knifeSound.current.volume = 0.5;
+
+    footstepSounds.current = {
+      grass: new Audio('https://assets.mixkit.co/active_storage/sfx/216/216-preview.mp3'),
+      sand: new Audio('https://assets.mixkit.co/active_storage/sfx/2065/2065-preview.mp3'),
+      rock: new Audio('https://assets.mixkit.co/active_storage/sfx/217/217-preview.mp3'),
+    };
+    footstepSounds.current.grass.volume = 0.2;
+    footstepSounds.current.sand.volume = 0.15;
+    footstepSounds.current.rock.volume = 0.25;
   }, []);
 
   // Attack handler
@@ -551,9 +588,67 @@ export function Player() {
                     if (playerMesh.current) playerMesh.current.scale.set(1, 1, 1);
                 }, 100);
             }
+            
+            // Play landing sound based on material
+            const playerPos = playerRef.current.translation();
+            const ray = new rapier.Ray(playerPos, { x: 0, y: -1, z: 0 });
+            const hit = world.castRay(ray, 2.0, true);
+            let material = 'grass';
+            if (hit && hit.collider) {
+                const rb = hit.collider.parent();
+                if (rb && rb.userData && (rb.userData as any).material) {
+                    material = (rb.userData as any).material;
+                }
+            }
+            const sound = footstepSounds.current[material] || footstepSounds.current['grass'];
+            if (sound) {
+                sound.playbackRate = 0.8; // Deeper pitch for landing
+                sound.volume = 0.4; // Louder for landing
+                sound.currentTime = 0;
+                sound.play().catch(() => {});
+                // Reset volume after
+                setTimeout(() => {
+                    if (material === 'grass') sound.volume = 0.2;
+                    else if (material === 'sand') sound.volume = 0.15;
+                    else if (material === 'rock') sound.volume = 0.25;
+                }, 100);
+            }
         }
         jumpCount.current = 0;
         isJumping.current = false;
+    }
+
+    // Footstep Logic
+    const isMoving = isGrounded && (Math.abs(vel.x) > 1 || Math.abs(vel.z) > 1);
+    const isDashing = Date.now() - lastDash < DASH_DURATION;
+
+    if (isMoving && !isDashing) {
+        const now = Date.now();
+        const speedSq = vel.x * vel.x + vel.z * vel.z;
+        const interval = speedSq > 25 ? 300 : 450; // Faster footsteps if running
+
+        if (now - lastFootstepTime.current > interval) {
+            lastFootstepTime.current = now;
+            
+            const playerPos = playerRef.current.translation();
+            const ray = new rapier.Ray(playerPos, { x: 0, y: -1, z: 0 });
+            const hit = world.castRay(ray, 2.0, true);
+            
+            let material = 'grass';
+            if (hit && hit.collider) {
+                const rb = hit.collider.parent();
+                if (rb && rb.userData && (rb.userData as any).material) {
+                    material = (rb.userData as any).material;
+                }
+            }
+            
+            const sound = footstepSounds.current[material] || footstepSounds.current['grass'];
+            if (sound) {
+                sound.playbackRate = 0.9 + Math.random() * 0.2; // Randomize pitch slightly
+                sound.currentTime = 0;
+                sound.play().catch(() => {});
+            }
+        }
     }
 
     // Jump Logic (Coyote Time & Buffering)
@@ -652,24 +747,24 @@ export function Player() {
                 // Sling animation: Wind up and Throw
                 const timeSinceShot = Date.now() - lastShot;
                 
-                if (timeSinceShot < 100) {
-                    // Wind up Phase (0-100ms) - Very fast pull back
+                if (timeSinceShot < 150) {
+                    // Wind up Phase (0-150ms) - Very fast pull back
                     // Rotate arm back and up significantly
-                    const windUpLerp = 1 - Math.exp(-30 * delta);
-                    rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, -Math.PI * 1.4, windUpLerp);
-                    rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, 1.2, windUpLerp); 
+                    const windUpLerp = 1 - Math.exp(-40 * delta);
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, -Math.PI * 1.8, windUpLerp);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, 1.5, windUpLerp); 
                 } else {
-                    // Throw Phase (100ms+)
-                    const throwProgress = (timeSinceShot - 100) / 400; // Remaining time
+                    // Throw Phase (150ms+)
+                    const throwProgress = (timeSinceShot - 150) / 350; // Remaining time
                     
-                    if (throwProgress < 0.15) {
+                    if (throwProgress < 0.2) {
                         // Snap Forward (Release) - Instant whip
-                        const snapLerp = 1 - Math.exp(-60 * delta);
-                        rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, Math.PI * 0.6, snapLerp);
-                        rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, 0, snapLerp);
+                        const snapLerp = 1 - Math.exp(-80 * delta);
+                        rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, Math.PI * 0.8, snapLerp);
+                        rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, -0.5, snapLerp);
                     } else {
                         // Follow Through / Recovery - Slow return
-                        const recoveryLerp = 1 - Math.exp(-10 * delta);
+                        const recoveryLerp = 1 - Math.exp(-15 * delta);
                         rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, 0, recoveryLerp);
                         rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, -0.1, recoveryLerp);
                     }
@@ -677,12 +772,20 @@ export function Player() {
             } else {
                 // Knife stab
                 const attackTime = (Date.now() - lastShot) / 400;
-                if (attackTime < 0.5) {
-                    // Stab out
-                     rightArm.current.rotation.x = THREE.MathUtils.lerp(0, -Math.PI/2, attackTime * 2);
+                if (attackTime < 0.2) {
+                    // Wind up slightly
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(0, Math.PI * 0.2, attackTime * 5);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(0, 0.2, attackTime * 5);
+                } else if (attackTime < 0.4) {
+                    // Quick stab out
+                    const stabProgress = (attackTime - 0.2) * 5;
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(Math.PI * 0.2, -Math.PI * 0.6, stabProgress);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(0.2, -0.2, stabProgress);
                 } else {
-                    // Return
-                     rightArm.current.rotation.x = THREE.MathUtils.lerp(-Math.PI/2, 0, (attackTime - 0.5) * 2);
+                    // Recoil and return
+                    const returnProgress = Math.min(1, (attackTime - 0.4) / 0.6);
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.6, 0, returnProgress);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(-0.2, 0, returnProgress);
                 }
             }
         }

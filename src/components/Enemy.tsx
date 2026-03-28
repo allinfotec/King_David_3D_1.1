@@ -38,8 +38,10 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   }, [id, rigidBody.current]);
   
   // AI State
-  const [state, setState] = useState<'chase' | 'search'>('chase');
+  const [state, setState] = useState<'chase' | 'search' | 'flank' | 'evade' | 'wait'>('chase');
   const searchTarget = useRef<THREE.Vector3 | null>(null);
+  const flankAngle = useRef<number>(Math.random() > 0.5 ? 1 : -1);
+  const lastStateChange = useRef<number>(0);
   const lastSeenPlayer = useRef<number>(0);
 
   const lastAttackTime = useRef<number>(0);
@@ -66,8 +68,12 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
         
         if (dist < 15) {
             const rand = Math.random();
-            if (rand < 0.3) {
-                // 30% chance to dodge
+            const isLowHealth = health / maxHealth < 0.3;
+            const dodgeChance = isLowHealth ? 0.6 : 0.3; // Double dodge chance when low health
+            const blockChance = isLowHealth ? 0.8 : 0.5; // Higher block chance when low health
+
+            if (rand < dodgeChance) {
+                // Dodge
                 setIsDodgingEnemy(true);
                 const dir = new THREE.Vector3(enemyPos.x - playerPos.x, 0, enemyPos.z - playerPos.z).normalize();
                 // Add sideways movement
@@ -83,8 +89,8 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                     setIsDodgingEnemy(false);
                     if (group.current) group.current.rotation.z = 0;
                 }, 600);
-            } else if (rand < 0.5) {
-                // 20% chance to block/brace
+            } else if (rand < blockChance) {
+                // Block/brace
                 setIsBlocking(true);
                 if (group.current) {
                     group.current.position.y = -0.2; // Crouch down
@@ -148,20 +154,77 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
 
     // Line of Sight / Distance check
     const canSeePlayer = distToPlayer < 20;
+    const isLowHealth = health / maxHealth < 0.3;
 
+    // State Machine Transitions
+    const now = Date.now();
     if (canSeePlayer) {
-      if (state !== 'chase') {
-          // Play growl sound on spot
-          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3'); // Placeholder growl
-          audio.volume = 0.2;
-          audio.playbackRate = 0.5;
-          audio.play().catch(() => {});
+      lastSeenPlayer.current = now;
+
+      if (isLowHealth && state !== 'evade' && now - lastStateChange.current > 2000) {
+          // Evade when low health
+          setState('evade');
+          lastStateChange.current = now;
+      } else if (!isLowHealth && state !== 'chase' && state !== 'flank') {
+          // Play growl sound when spotting player
+          if (state === 'search') {
+              const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3');
+              audio.volume = 0.3;
+              audio.playbackRate = 0.8;
+              audio.play().catch(() => {});
+          }
+          setState('chase');
+          lastStateChange.current = now;
       }
-      setState('chase');
-      lastSeenPlayer.current = Date.now();
+
+      // Randomly decide to flank if chasing and close enough
+      if (state === 'chase' && distToPlayer < 8 && distToPlayer > 3 && now - lastStateChange.current > 3000) {
+          if (Math.random() < 0.4) {
+              setState('flank');
+              flankAngle.current = Math.random() > 0.5 ? 1 : -1;
+              lastStateChange.current = now;
+          }
+      }
+
+      // Coordinated attacks: Wait if another enemy is already attacking
+      if (state === 'chase' && distToPlayer < 6 && now - lastStateChange.current > 1000) {
+          let isAnotherAttacking = false;
+          enemyRefs.forEach((ref, enemyId) => {
+              if (enemyId !== id) {
+                  const otherPos = ref.translation();
+                  const otherDist = new THREE.Vector3(otherPos.x, 0, otherPos.z).distanceTo(new THREE.Vector3(playerPos.x, 0, playerPos.z));
+                  if (otherDist < 4) {
+                      isAnotherAttacking = true;
+                  }
+              }
+          });
+
+          if (isAnotherAttacking && Math.random() < 0.6) {
+              setState('wait');
+              lastStateChange.current = now;
+          }
+      }
+
+      // Stop waiting after a while or if player moves away
+      if (state === 'wait' && (now - lastStateChange.current > 2000 || distToPlayer > 8)) {
+          setState('chase');
+          lastStateChange.current = now;
+      }
+
+      // Stop flanking after a while or if too close/far
+      if (state === 'flank' && (now - lastStateChange.current > 4000 || distToPlayer < 2.5 || distToPlayer > 10)) {
+          setState('chase');
+          lastStateChange.current = now;
+      }
+
+      // Stop evading after a while, maybe try a desperate attack
+      if (state === 'evade' && now - lastStateChange.current > 3000) {
+          setState('chase');
+          lastStateChange.current = now;
+      }
       
       // Attack Logic
-      if (distToPlayer < 3 && !isAttacking.current && Date.now() - lastAttackTime.current > ATTACK_COOLDOWN) {
+      if (distToPlayer < 3 && !isAttacking.current && now - lastAttackTime.current > ATTACK_COOLDOWN) {
           isAttacking.current = true;
           
           // Wind up animation (visual only)
@@ -190,9 +253,9 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                       takeDamage(ATTACK_DAMAGE);
                       
                       // Attack Sound
-                      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3'); 
-                      audio.volume = 0.5;
-                      audio.playbackRate = 1.5;
+                      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/215/215-preview.mp3'); 
+                      audio.volume = 0.6;
+                      audio.playbackRate = 1.2;
                       audio.play().catch(() => {});
                       
                       // Knockback Player (Optional, maybe just visual shake)
@@ -207,9 +270,10 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           }, 400);
       }
 
-    } else if (Date.now() - lastSeenPlayer.current > 5000 && state === 'chase') {
+    } else if (now - lastSeenPlayer.current > 5000 && state !== 'search') {
       setState('search');
       searchTarget.current = null;
+      lastStateChange.current = now;
     }
 
     let moveDir = new THREE.Vector3();
@@ -217,6 +281,18 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
     if (!isAttacking.current) {
         if (state === 'chase') {
           moveDir.subVectors(playerPos, enemyPos).normalize();
+        } else if (state === 'flank') {
+          // Move towards player but offset by an angle
+          const toPlayer = new THREE.Vector3().subVectors(playerPos, enemyPos).normalize();
+          moveDir.copy(toPlayer).applyAxisAngle(new THREE.Vector3(0, 1, 0), flankAngle.current * Math.PI / 2.5);
+        } else if (state === 'evade') {
+          // Move away from player, slightly randomized
+          moveDir.subVectors(enemyPos, playerPos).normalize();
+          moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), (Math.random() - 0.5) * Math.PI / 2);
+        } else if (state === 'wait') {
+          // Circle the player slowly
+          const toPlayer = new THREE.Vector3().subVectors(playerPos, enemyPos).normalize();
+          moveDir.copy(toPlayer).applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
         } else if (state === 'search') {
           if (!searchTarget.current || new THREE.Vector3(enemyPos.x, 0, enemyPos.z).distanceTo(new THREE.Vector3(searchTarget.current.x, 0, searchTarget.current.z)) < 1) {
              const angle = Math.random() * Math.PI * 2;
@@ -232,7 +308,12 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
     }
 
     // Apply movement
-    const speed = state === 'chase' ? ENEMY_SPEED : ENEMY_SPEED * 0.5;
+    let speed = ENEMY_SPEED;
+    if (state === 'search') speed *= 0.5;
+    if (state === 'evade') speed *= 1.2; // Run away faster
+    if (state === 'flank') speed *= 0.9; // Flank slightly slower than direct chase
+    if (state === 'wait') speed *= 0.4; // Circle slowly while waiting
+
     const currentVel = rigidBody.current.linvel();
     
     if (!isAttacking.current) {
@@ -247,13 +328,25 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
 
     // Animation (Idle/Run)
     if (group.current && !isAttacking.current) {
-      const freq = state === 'chase' ? 15 : 8;
+      let freq = 8;
+      if (state === 'chase') freq = 15;
+      if (state === 'evade') freq = 20;
+      if (state === 'flank') freq = 12;
+      if (state === 'wait') freq = 6;
+      
       group.current.position.y = Math.sin(clockState.clock.elapsedTime * freq) * 0.1;
       
       if (state === 'search' && Math.sin(clockState.clock.elapsedTime * 2) > 0.8) {
-         group.current.rotation.x = 0.3;
+         group.current.rotation.x = 0.3; // Sniffing ground
+      } else if (state === 'evade') {
+         group.current.rotation.x = -0.2; // Leaning back while running
+      } else if (state === 'flank') {
+         group.current.rotation.z = flankAngle.current * 0.2; // Leaning into the flank
+      } else if (state === 'wait') {
+         group.current.rotation.x = 0.1; // Slightly hunched
       } else {
          group.current.rotation.x = 0;
+         group.current.rotation.z = 0;
       }
     }
 

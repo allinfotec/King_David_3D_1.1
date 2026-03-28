@@ -3,6 +3,7 @@ import { useTexture, Instance, Instances, Float } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMemo, useRef, useEffect } from 'react';
+import { useStore } from '../store';
 
 function Tree({ position, scale = 1, type = 'normal' }: { position: [number, number, number], scale?: number, type?: 'normal' | 'dead' }) {
   const isDead = type === 'dead';
@@ -64,7 +65,7 @@ function Rock({ position, scale = 1 }: { position: [number, number, number], sca
   const rotation = useMemo(() => [Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI] as [number, number, number], []);
   
   return (
-    <RigidBody type="fixed" colliders="hull" position={position}>
+    <RigidBody type="fixed" colliders="hull" position={position} userData={{ material: 'rock' }}>
       <group scale={scale} rotation={rotation}>
         {/* Main mass */}
         <mesh castShadow receiveShadow>
@@ -146,6 +147,8 @@ function Grass() {
   }, [count]);
 
   useFrame(({ clock }) => {
+    const { isPaused, health } = useStore.getState();
+    if (isPaused || health <= 0) return;
     timeRef.current.value = clock.getElapsedTime();
   });
 
@@ -257,7 +260,7 @@ function Hills() {
 
 function Pillar({ position, scale = 1, broken = false }: { position: [number, number, number], scale?: number, broken?: boolean }) {
   return (
-    <RigidBody type="fixed" colliders="cuboid" position={position}>
+    <RigidBody type="fixed" colliders="cuboid" position={position} userData={{ material: 'rock' }}>
       <group scale={scale}>
         {/* Base */}
         <mesh castShadow receiveShadow position={[0, 0.25, 0]}>
@@ -290,7 +293,7 @@ function Pillar({ position, scale = 1, broken = false }: { position: [number, nu
 
 function Well({ position }: { position: [number, number, number] }) {
   return (
-    <RigidBody type="fixed" colliders="hull" position={position}>
+    <RigidBody type="fixed" colliders="hull" position={position} userData={{ material: 'rock' }}>
       <group>
         {/* Base ring */}
         <mesh castShadow receiveShadow position={[0, 0.5, 0]}>
@@ -378,10 +381,18 @@ export function World() {
   return (
     <group>
       {/* Ground - Moved to y=-2 to match physics/visuals */}
-      <RigidBody type="fixed" colliders="hull">
+      <RigidBody type="fixed" colliders="hull" userData={{ material: 'grass' }}>
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]} receiveShadow>
           <planeGeometry args={[200, 200, 64, 64]} />
           <meshPhysicalMaterial map={texture} bumpMap={texture} bumpScale={0.05} color="#4e342e" roughness={1} clearcoat={0.1} clearcoatRoughness={0.9} />
+        </mesh>
+      </RigidBody>
+
+      {/* Sandy Area */}
+      <RigidBody type="fixed" colliders="cuboid" position={[20, -1.95, -20]} userData={{ material: 'sand' }}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[40, 40]} />
+          <meshPhysicalMaterial color="#d2b48c" roughness={1} />
         </mesh>
       </RigidBody>
 
@@ -410,7 +421,7 @@ export function World() {
       <Hills />
 
       {/* Ancient Ruins - Wall - Adjusted Y to sit on ground at -2 */}
-      <RigidBody type="fixed" colliders="cuboid" position={[-10, -1, 10]}>
+      <RigidBody type="fixed" colliders="cuboid" position={[-10, -1, 10]} userData={{ material: 'rock' }}>
         <mesh castShadow receiveShadow>
           <boxGeometry args={[8, 3, 1]} />
           <meshPhysicalMaterial color="#a1887f" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />

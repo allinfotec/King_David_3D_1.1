@@ -9,7 +9,7 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const center = useRef({ x: 0, y: 0 });
+  const touchStart = useRef({ x: 0, y: 0 });
   const pointerId = useRef<number | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -18,12 +18,7 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
     e.currentTarget.setPointerCapture(e.pointerId);
     pointerId.current = e.pointerId;
     
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    center.current = {
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2,
-    };
+    touchStart.current = { x: e.clientX, y: e.clientY };
     setActive(true);
     handleMove(e.clientX, e.clientY);
   };
@@ -44,11 +39,11 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
   };
 
   const handleMove = (clientX: number, clientY: number) => {
-    const dx = clientX - center.current.x;
-    const dy = clientY - center.current.y;
+    const dx = clientX - touchStart.current.x;
+    const dy = clientY - touchStart.current.y;
     
     const distance = Math.sqrt(dx * dx + dy * dy);
-    const maxDist = 40; // Max radius
+    const maxDist = 50; // Max radius for visual knob
     
     let x = dx;
     let y = dy;
@@ -61,25 +56,44 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
     setPosition({ x, y });
     
     // Normalize output -1 to 1
-    onMove(x / maxDist, y / maxDist);
+    let outX = x / maxDist;
+    let outY = y / maxDist;
+
+    // Small deadzone
+    const deadzone = 0.1;
+    const outDist = Math.sqrt(outX * outX + outY * outY);
+    if (outDist < deadzone) {
+      outX = 0;
+      outY = 0;
+    } else {
+      // Rescale so it smoothly goes from 0 to 1 after deadzone
+      const rescale = (outDist - deadzone) / (1 - deadzone);
+      outX = (outX / outDist) * rescale;
+      outY = (outY / outDist) * rescale;
+    }
+
+    onMove(outX, outY);
   };
 
   return (
     <div 
       ref={containerRef}
-      className="relative w-32 h-32 bg-white/10 border-2 border-white/30 rounded-full backdrop-blur-sm touch-none"
+      className="relative w-40 h-40 bg-white/10 border-2 border-white/30 rounded-full backdrop-blur-sm touch-none flex items-center justify-center shadow-lg"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onContextMenu={(e) => e.preventDefault()}
     >
+      {/* Inner decorative circle */}
+      <div className="absolute w-16 h-16 rounded-full border border-white/20 pointer-events-none" />
+      
+      {/* The Joystick Knob */}
       <div 
-        className="absolute w-12 h-12 bg-white/50 rounded-full shadow-lg pointer-events-none"
+        className="absolute w-14 h-14 bg-white/60 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.4)] pointer-events-none"
         style={{
-          left: `calc(50% + ${position.x}px - 24px)`,
-          top: `calc(50% + ${position.y}px - 24px)`,
-          transition: active ? 'none' : 'all 0.2s ease-out'
+          transform: `translate(${position.x}px, ${position.y}px)`,
+          transition: active ? 'none' : 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
         }}
       />
     </div>

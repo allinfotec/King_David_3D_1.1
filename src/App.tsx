@@ -127,6 +127,12 @@ function UI() {
   const { health, score, isPaused, reset, togglePause, enemies, phase, phaseMessage } = useStore();
 
   useEffect(() => {
+    if (health <= 0) {
+      document.exitPointerLock();
+    }
+  }, [health]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'KeyP' || e.code === 'Escape') {
         togglePause();
@@ -377,6 +383,61 @@ function AmbientSound() {
   return null;
 }
 
+function CombatMusic() {
+  const isPaused = useStore((state) => state.isPaused);
+  const health = useStore((state) => state.health);
+  const enemies = useStore((state) => state.enemies);
+
+  const [audio] = useState(() => {
+    // Fast-paced drum loop for combat
+    const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2042/2042-preview.mp3'); 
+    a.loop = true;
+    a.volume = 0;
+    return a;
+  });
+
+  useEffect(() => {
+    if (isPaused || health <= 0) {
+        audio.pause();
+        return;
+    }
+
+    if (enemies.length > 0) {
+        if (audio.paused) {
+            audio.play().catch(() => {});
+        }
+        // Adjust volume based on number of enemies (max volume 0.4)
+        const targetVolume = Math.min(0.4, 0.1 + enemies.length * 0.1);
+        
+        // Smooth volume transition
+        const fadeInterval = setInterval(() => {
+            if (audio.volume < targetVolume) {
+                audio.volume = Math.min(targetVolume, audio.volume + 0.05);
+            } else if (audio.volume > targetVolume) {
+                audio.volume = Math.max(targetVolume, audio.volume - 0.05);
+            } else {
+                clearInterval(fadeInterval);
+            }
+        }, 100);
+        return () => clearInterval(fadeInterval);
+    } else {
+        // Fade out
+        const fadeInterval = setInterval(() => {
+            if (audio.volume > 0.05) {
+                audio.volume = Math.max(0, audio.volume - 0.05);
+            } else {
+                audio.volume = 0;
+                audio.pause();
+                clearInterval(fadeInterval);
+            }
+        }, 100);
+        return () => clearInterval(fadeInterval);
+    }
+  }, [enemies.length, isPaused, health, audio]);
+
+  return null;
+}
+
 function TouchCameraControls() {
   const { camera, gl } = useThree();
   const isPaused = useStore((state) => state.isPaused);
@@ -453,7 +514,7 @@ function TouchCameraControls() {
       canvas.removeEventListener('touchend', onTouchEnd);
       canvas.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, [camera, gl, isPaused]);
+  }, [camera, gl, isPaused, health]);
 
   return null;
 }
@@ -588,6 +649,7 @@ function GameContent() {
       <TargetIndicator />
       <Effects />
       <AmbientSound />
+      <CombatMusic />
       <TouchCameraControls />
       
       {stones.map((stone) => (
@@ -618,8 +680,8 @@ export default function App() {
           <Canvas 
             shadows 
             camera={{ fov: 75 }} 
-            dpr={[1, 2]} 
-            gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
+            dpr={[1, 2.5]} 
+            gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2, powerPreference: "high-performance" }}
             onCreated={({ gl }) => {
               gl.shadowMap.enabled = true;
               gl.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -672,15 +734,14 @@ export default function App() {
                 <GameContent />
               </Physics>
               
-              <PointerLockControls />
+              <PointerLockControls enabled={health > 0 && !isPaused} />
               <TouchCameraControls />
               
               {/* Post-processing effects */}
-              <EffectComposer disableNormalPass>
-                <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.9} height={300} intensity={0.8} />
+              <EffectComposer multisampling={8}>
+                <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.9} intensity={0.8} resolutionScale={2} />
                 <Noise opacity={0.025} />
                 <Vignette eskil={false} offset={0.1} darkness={1.1} />
-                <DepthOfField focusDistance={0} focalLength={0.02} bokehScale={2} height={480} />
               </EffectComposer>
             </Suspense>
           </Canvas>

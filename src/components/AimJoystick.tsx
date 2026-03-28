@@ -12,7 +12,7 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
   const containerRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const center = useRef({ x: 0, y: 0 });
+  const touchStart = useRef({ x: 0, y: 0 });
   const pointerId = useRef<number | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -21,20 +21,15 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
     e.currentTarget.setPointerCapture(e.pointerId);
     pointerId.current = e.pointerId;
     
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    center.current = {
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2,
-    };
+    touchStart.current = { x: e.clientX, y: e.clientY };
     setActive(true);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!active || e.pointerId !== pointerId.current) return;
     
-    const dx = e.clientX - center.current.x;
-    const dy = e.clientY - center.current.y;
+    const dx = e.clientX - touchStart.current.x;
+    const dy = e.clientY - touchStart.current.y;
     
     const distance = Math.sqrt(dx * dx + dy * dy);
     const maxDist = 40;
@@ -48,7 +43,24 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
     }
     
     setPosition({ x, y });
-    onAim(x / maxDist, y / maxDist);
+
+    // Normalize output -1 to 1
+    let outX = x / maxDist;
+    let outY = y / maxDist;
+
+    // Small deadzone
+    const deadzone = 0.1;
+    const outDist = Math.sqrt(outX * outX + outY * outY);
+    if (outDist < deadzone) {
+      outX = 0;
+      outY = 0;
+    } else {
+      const rescale = (outDist - deadzone) / (1 - deadzone);
+      outX = (outX / outDist) * rescale;
+      outY = (outY / outDist) * rescale;
+    }
+
+    onAim(outX, outY);
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -65,7 +77,7 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
   return (
     <div 
       ref={containerRef}
-      className={`relative w-[72px] h-[72px] p-3 rounded-xl border-2 flex flex-col items-center justify-center transition-all backdrop-blur-md touch-none select-none ${colorClass}`}
+      className={`relative w-[80px] h-[80px] p-3 rounded-xl border-2 flex flex-col items-center justify-center transition-all backdrop-blur-md touch-none select-none ${colorClass}`}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -77,7 +89,7 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
         className="flex flex-col items-center justify-center pointer-events-none z-10"
         style={{
           transform: `translate(${position.x}px, ${position.y}px)`,
-          transition: active ? 'none' : 'transform 0.2s ease-out'
+          transition: active ? 'none' : 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
         }}
       >
         {icon}

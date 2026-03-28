@@ -46,7 +46,7 @@ export function Stone({ id, position, velocity }: StoneProps) {
            
            if (isEnemy) {
                // Flesh hit sound
-               const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3'); // Placeholder for flesh hit
+               const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/216/216-preview.mp3'); // Placeholder for flesh hit
                audio.volume = 0.4;
                audio.playbackRate = 0.8; // Lower pitch for flesh
                audio.play().catch(() => {});
@@ -60,7 +60,7 @@ export function Stone({ id, position, velocity }: StoneProps) {
                addEffect([pos.x, pos.y, pos.z], 'impact');
                
                // Rock hit sound
-               const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/212/212-preview.mp3'); // Placeholder for rock hit
+               const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/217/217-preview.mp3'); // Placeholder for rock hit
                audio.volume = 0.3;
                audio.playbackRate = 1.2; // Higher pitch for rock
                audio.play().catch(() => {});
