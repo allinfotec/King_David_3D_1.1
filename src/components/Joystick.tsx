@@ -43,31 +43,40 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
     const dy = clientY - touchStart.current.y;
     
     const distance = Math.sqrt(dx * dx + dy * dy);
-    const maxDist = 50; // Max radius for visual knob
+    const maxVisualDist = 50; // Max radius for visual knob
+    const maxLogicalDist = 30; // Distance to reach 100% speed (more sensitive)
     
     let x = dx;
     let y = dy;
     
-    if (distance > maxDist) {
-      x = (dx / distance) * maxDist;
-      y = (dy / distance) * maxDist;
+    if (distance > maxVisualDist) {
+      x = (dx / distance) * maxVisualDist;
+      y = (dy / distance) * maxVisualDist;
     }
     
     setPosition({ x, y });
     
-    // Normalize output -1 to 1
-    let outX = x / maxDist;
-    let outY = y / maxDist;
+    // Normalize output -1 to 1 based on logical distance
+    let outX = dx / maxLogicalDist;
+    let outY = dy / maxLogicalDist;
 
     // Small deadzone
-    const deadzone = 0.1;
-    const outDist = Math.sqrt(outX * outX + outY * outY);
+    const deadzone = 0.05; // Reduced deadzone for quicker response
+    let outDist = Math.sqrt(outX * outX + outY * outY);
+    
+    if (outDist > 1) {
+      outX /= outDist;
+      outY /= outDist;
+      outDist = 1;
+    }
+
     if (outDist < deadzone) {
       outX = 0;
       outY = 0;
     } else {
       // Rescale so it smoothly goes from 0 to 1 after deadzone
-      const rescale = (outDist - deadzone) / (1 - deadzone);
+      // Apply a slight curve to make small movements more precise but ramp up faster
+      const rescale = Math.pow((outDist - deadzone) / (1 - deadzone), 0.85);
       outX = (outX / outDist) * rescale;
       outY = (outY / outDist) * rescale;
     }

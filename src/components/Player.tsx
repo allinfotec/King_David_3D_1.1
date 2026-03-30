@@ -354,6 +354,7 @@ export function Player() {
   const knifeRef = useRef<THREE.Group>(null);
   const rollGroup = useRef<THREE.Group>(null);
   const rollState = useRef({ active: false, startTime: 0, direction: new THREE.Vector3() });
+  const doubleJumpState = useRef({ active: false, startTime: 0 });
 
   // Gamepad state
   const gamepadState = useRef({
@@ -506,7 +507,19 @@ export function Player() {
         const now = Date.now();
         if (now - lastDash > DASH_COOLDOWN) {
             setLastDash(now);
-            const dashDir = direction.length() > 0 ? direction.normalize() : cameraDirection;
+            
+            // Determine dash direction: joystick direction OR player's current facing direction
+            let dashDir = new THREE.Vector3();
+            if (direction.length() > 0) {
+                dashDir = direction.clone().normalize();
+            } else if (playerMesh.current) {
+                // Use player's current rotation to determine forward direction
+                const rotY = playerMesh.current.rotation.y;
+                dashDir.set(Math.sin(rotY), 0, Math.cos(rotY)).normalize();
+            } else {
+                dashDir = cameraDirection.clone();
+            }
+
             playerRef.current.applyImpulse({ x: dashDir.x * DASH_FORCE, y: 0, z: dashDir.z * DASH_FORCE }, true);
             
             // Visual effect for dash
@@ -545,6 +558,24 @@ export function Player() {
             if (rollGroup.current) {
                 rollGroup.current.rotation.set(0, 0, 0);
                 rollGroup.current.position.y = 0;
+            }
+        }
+    }
+
+    // Double Jump Flip Animation Logic
+    if (doubleJumpState.current.active) {
+        const elapsed = Date.now() - doubleJumpState.current.startTime;
+        const progress = elapsed / 400; // 400ms flip duration
+        
+        if (progress < 1) {
+            if (rollGroup.current && playerMesh.current) {
+                // Front flip around local X axis
+                rollGroup.current.rotation.x = progress * Math.PI * 2;
+            }
+        } else {
+            doubleJumpState.current.active = false;
+            if (rollGroup.current && !rollState.current.active) {
+                rollGroup.current.rotation.x = 0;
             }
         }
     }
@@ -669,6 +700,9 @@ export function Player() {
             // Double jump effect
             const pos = playerRef.current.translation();
             addEffect([pos.x, pos.y - 0.5, pos.z], 'impact');
+            
+            // Start double jump flip animation
+            doubleJumpState.current = { active: true, startTime: nowTime };
         }
     }
 
@@ -810,7 +844,7 @@ export function Player() {
         <group ref={rollGroup}>
           {/* Tunic (Body) - Better shape */}
           <mesh castShadow position={[0, 0.6, 0]}>
-          <cylinderGeometry args={[0.28, 0.42, 1.2, 32]} /> {/* Increased segments */}
+          <cylinderGeometry args={[0.26, 0.45, 1.2, 32]} /> {/* Increased segments, wider base */}
           <meshPhysicalMaterial color="#e3dac9" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.4} />
         </mesh>
         
@@ -935,7 +969,15 @@ export function Player() {
               <meshPhysicalMaterial color="#cc7a6f" clearcoat={0.2} clearcoatRoughness={0.2} />
           </mesh>
 
-          {/* Beard (Removed for young David, kept clean shaven) */}
+          {/* Blush */}
+          <mesh position={[0.15, -0.02, 0.05]}>
+              <sphereGeometry args={[0.03, 16, 16]} />
+              <meshPhysicalMaterial color="#ff9999" roughness={0.8} transmission={0.5} thickness={0.1} />
+          </mesh>
+          <mesh position={[-0.15, -0.02, 0.05]}>
+              <sphereGeometry args={[0.03, 16, 16]} />
+              <meshPhysicalMaterial color="#ff9999" roughness={0.8} transmission={0.5} thickness={0.1} />
+          </mesh>
         </group>
 
         {/* Hair (Brown/Auburn) - More detailed curls */}
@@ -944,6 +986,20 @@ export function Player() {
           <mesh castShadow position={[0, 0.05, 0.05]}>
             <sphereGeometry args={[0.27, 32, 32, 0, Math.PI * 2, 0, Math.PI / 1.7]} />
             <meshPhysicalMaterial color="#5C3A21" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} /> 
+          </mesh>
+          
+          {/* Curls/Bangs */}
+          <mesh position={[0.1, 0.1, -0.2]} rotation={[0.2, 0.1, 0]}>
+             <sphereGeometry args={[0.08, 16, 16]} />
+             <meshPhysicalMaterial color="#5C3A21" roughness={0.9} />
+          </mesh>
+          <mesh position={[-0.1, 0.1, -0.2]} rotation={[0.2, -0.1, 0]}>
+             <sphereGeometry args={[0.08, 16, 16]} />
+             <meshPhysicalMaterial color="#5C3A21" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.15, -0.22]} rotation={[0.3, 0, 0]}>
+             <sphereGeometry args={[0.09, 16, 16]} />
+             <meshPhysicalMaterial color="#5C3A21" roughness={0.9} />
           </mesh>
           
           {/* Headband */}
