@@ -27,6 +27,7 @@ interface GameState {
   score: number;
   isPaused: boolean;
   isDodging: boolean;
+  isBlocking: boolean;
   isStarted: boolean;
   phase: number;
   enemiesKilledInPhase: number;
@@ -42,6 +43,7 @@ interface GameState {
   addScore: (amount: number) => void;
   togglePause: () => void;
   setDodging: (dodging: boolean) => void;
+  setBlocking: (blocking: boolean) => void;
   setTargetId: (id: string | null) => void;
   startGame: () => void;
   resumeGame: () => void;
@@ -63,6 +65,7 @@ export const useStore = create<GameState>((set) => ({
   score: 0,
   isPaused: false,
   isDodging: false,
+  isBlocking: false,
   isStarted: false,
   phase: 1,
   enemiesKilledInPhase: 0,
@@ -80,10 +83,11 @@ export const useStore = create<GameState>((set) => ({
   addScore: (amount) => set((state) => ({ score: state.score + amount })),
   togglePause: () => set((state) => ({ isPaused: !state.isPaused })),
   setDodging: (dodging) => set({ isDodging: dodging }),
+  setBlocking: (blocking) => set({ isBlocking: blocking }),
   setTargetId: (id) => set({ targetId: id }),
   startGame: () => set({ isStarted: true, health: 100, score: 0, isPaused: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, storyScreen: 0, stones: [], enemies: [], effects: [], targetId: null }),
   resumeGame: () => set({ isStarted: true, isPaused: false, storyScreen: 0, stones: [], enemies: [], effects: [] }),
-  reset: () => set({ health: 100, score: 0, isPaused: false, isDodging: false, isStarted: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, storyScreen: 1, stones: [], enemies: [], effects: [], targetId: null }),
+  reset: () => set({ health: 100, score: 0, isPaused: false, isDodging: false, isBlocking: false, isStarted: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, storyScreen: 1, stones: [], enemies: [], effects: [], targetId: null }),
   shootStone: (position, velocity) => set((state) => ({
     stones: [...state.stones, { id: nanoid(), position, velocity }]
   })),
@@ -110,6 +114,7 @@ export const useStore = create<GameState>((set) => ({
     else if (state.phase === 3) nextStoryScreen = 9;
     
     return { 
+      health: 100, // Replenish health when passing the phase
       phase: state.phase + 1, 
       enemiesKilledInPhase: 0, 
       phaseMessage: null, 

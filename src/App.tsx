@@ -284,6 +284,18 @@ function UI() {
 
       {/* Bottom Right: Actions (Jump, Weapons) */}
       <div className="absolute bottom-8 right-8 flex gap-4 pointer-events-auto">
+        {/* Column 0: Block */}
+        <div className="flex flex-col gap-4 items-center justify-end">
+            <button 
+                className="w-16 h-16 bg-green-900/60 border-2 border-green-500 rounded-full active:bg-green-700/80 backdrop-blur-md flex items-center justify-center text-white font-bold text-[10px] hover:bg-green-800/60 transition-all shadow-lg shadow-green-900/30"
+                onPointerDown={() => window.dispatchEvent(new Event('blockStart'))}
+                onPointerUp={() => window.dispatchEvent(new Event('blockEnd'))}
+                onPointerLeave={() => window.dispatchEvent(new Event('blockEnd'))}
+            >
+                DEFESA
+            </button>
+        </div>
+
         {/* Column 1: Dodge above Stone */}
         <div className="flex flex-col gap-4 items-center justify-end">
              {/* Dash Button */}
@@ -334,6 +346,7 @@ function UI() {
         <p>Arraste os botões de arma para Mirar e Atirar</p>
         <p>ESPAÇO / Botão para Pular</p>
         <p>SHIFT / Botão para Esquiva</p>
+        <p>E / Botão para Defesa</p>
         <p>CLIQUE ESQUERDO para Faca</p>
         <p>CLIQUE DIREITO para Funda</p>
       </div>

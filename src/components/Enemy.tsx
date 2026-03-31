@@ -27,6 +27,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   const [isDead, setIsDead] = useState(false);
   const [isDodgingEnemy, setIsDodgingEnemy] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
+  const dodgeDir = useRef<number>(0);
 
   useEffect(() => {
     if (rigidBody.current) {
@@ -80,28 +81,30 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                 dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), (Math.random() > 0.5 ? 1 : -1) * Math.PI / 3);
                 rigidBody.current.applyImpulse({ x: dir.x * 15, y: 3, z: dir.z * 15 }, true);
                 
-                // Visual dodge roll/lean
-                if (group.current) {
-                    group.current.rotation.z = dir.x > 0 ? -0.5 : 0.5;
-                }
+                dodgeDir.current = dir.x > 0 ? -1 : 1;
+                
+                // Dodge sound
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2065/2065-preview.mp3');
+                audio.volume = 0.4;
+                audio.playbackRate = 1.5;
+                audio.play().catch(() => {});
                 
                 setTimeout(() => {
                     setIsDodgingEnemy(false);
-                    if (group.current) group.current.rotation.z = 0;
+                    dodgeDir.current = 0;
                 }, 600);
             } else if (rand < blockChance) {
                 // Block/brace
                 setIsBlocking(true);
-                if (group.current) {
-                    group.current.position.y = -0.2; // Crouch down
-                    group.current.rotation.x = 0.2; // Head down
-                }
+                
+                // Block sound
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/217/217-preview.mp3');
+                audio.volume = 0.5;
+                audio.playbackRate = 0.8;
+                audio.play().catch(() => {});
+                
                 setTimeout(() => {
                     setIsBlocking(false);
-                    if (group.current) {
-                        group.current.position.y = 0;
-                        group.current.rotation.x = 0;
-                    }
                 }, 800);
             }
         }
@@ -169,8 +172,8 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           // Play growl sound when spotting player
           if (state === 'search') {
               const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3');
-              audio.volume = 0.3;
-              audio.playbackRate = 0.8;
+              audio.volume = type === 'bear' ? 0.6 : type === 'lion' ? 0.8 : 0.3;
+              audio.playbackRate = type === 'bear' ? 0.6 : type === 'lion' ? 0.9 : 1.5;
               audio.play().catch(() => {});
           }
           setState('chase');
@@ -250,13 +253,26 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                   // Check Hit
                   const hitDist = new THREE.Vector3(currentPos.x, 0, currentPos.z).distanceTo(new THREE.Vector3(pPos.x, 0, pPos.z));
                   if (hitDist < 3.5 && !useStore.getState().isDodging) {
-                      takeDamage(ATTACK_DAMAGE);
+                      const isPlayerBlocking = useStore.getState().isBlocking;
+                      const finalDamage = isPlayerBlocking ? ATTACK_DAMAGE * 0.2 : ATTACK_DAMAGE; // 80% damage reduction when blocking
+                      takeDamage(finalDamage);
                       
                       // Attack Sound
                       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/215/215-preview.mp3'); 
-                      audio.volume = 0.6;
-                      audio.playbackRate = 1.2;
+                      audio.volume = type === 'bear' ? 0.8 : type === 'lion' ? 1.0 : 0.6;
+                      audio.playbackRate = type === 'bear' ? 0.6 : type === 'lion' ? 0.9 : 1.5;
                       audio.play().catch(() => {});
+                      
+                      if (isPlayerBlocking) {
+                          // Block sound
+                          const blockAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2952/2952-preview.mp3'); // Knife clink sound for block
+                          blockAudio.volume = 0.5;
+                          blockAudio.playbackRate = 0.5; // Lower pitch for block
+                          blockAudio.play().catch(() => {});
+                          
+                          // Visual feedback for block
+                          useStore.getState().addEffect([pPos.x, pPos.y + 1, pPos.z], 'flash');
+                      }
                       
                       // Knockback Player (Optional, maybe just visual shake)
                   }
@@ -326,7 +342,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
         }
     }
 
-    // Animation (Idle/Run)
+    // Animation (Idle/Run/Dodge/Block/Stagger)
     if (group.current && !isAttacking.current) {
       let freq = 8;
       if (state === 'chase') freq = 15;
@@ -334,19 +350,36 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
       if (state === 'flank') freq = 12;
       if (state === 'wait') freq = 6;
       
-      group.current.position.y = Math.sin(clockState.clock.elapsedTime * freq) * 0.1;
+      const lerpFactor = 1 - Math.exp(-15 * delta);
       
-      if (state === 'search' && Math.sin(clockState.clock.elapsedTime * 2) > 0.8) {
-         group.current.rotation.x = 0.3; // Sniffing ground
-      } else if (state === 'evade') {
-         group.current.rotation.x = -0.2; // Leaning back while running
-      } else if (state === 'flank') {
-         group.current.rotation.z = flankAngle.current * 0.2; // Leaning into the flank
-      } else if (state === 'wait') {
-         group.current.rotation.x = 0.1; // Slightly hunched
+      if (isDodgingEnemy) {
+          // Smooth dodge roll
+          group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, dodgeDir.current * Math.PI * 2, lerpFactor * 0.5);
+          group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0.5, lerpFactor);
+      } else if (isBlocking) {
+          // Smooth block crouch
+          group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, -0.3, lerpFactor);
+          group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.4, lerpFactor);
+          group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, lerpFactor);
+      } else if (isStaggered) {
+          // Stagger is handled in handleHit, but we can smooth return
+          group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, lerpFactor);
       } else {
-         group.current.rotation.x = 0;
-         group.current.rotation.z = 0;
+          // Normal movement animation
+          group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, Math.sin(clockState.clock.elapsedTime * freq) * 0.1, lerpFactor);
+          
+          if (state === 'search' && Math.sin(clockState.clock.elapsedTime * 2) > 0.8) {
+             group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.3, lerpFactor); // Sniffing ground
+          } else if (state === 'evade') {
+             group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, -0.2, lerpFactor); // Leaning back while running
+          } else if (state === 'flank') {
+             group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, flankAngle.current * 0.2, lerpFactor); // Leaning into the flank
+          } else if (state === 'wait') {
+             group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.1, lerpFactor); // Slightly hunched
+          } else {
+             group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0, lerpFactor);
+             group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, lerpFactor);
+          }
       }
     }
 
@@ -413,6 +446,12 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           // Lean back and shake
           group.current.rotation.x = -0.5;
           group.current.position.y = 0.2;
+          
+          // Play hit sound based on type
+          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/216/216-preview.mp3');
+          audio.volume = type === 'bear' ? 0.7 : type === 'lion' ? 0.9 : 0.5;
+          audio.playbackRate = type === 'bear' ? 0.7 : type === 'lion' ? 0.8 : 1.2;
+          audio.play().catch(() => {});
           
           let shakeCount = 0;
           const shakeInterval = setInterval(() => {
@@ -637,8 +676,10 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           )}
           {type === 'lion' && (
             <group position={[0, 0.2, -0.6]} rotation={[-0.4, 0, 0]}>
-               <cylinderGeometry args={[0.03, 0.03, 0.8, 8]} />
-               <meshPhysicalMaterial color={BODY_COLOR} />
+               <mesh>
+                 <cylinderGeometry args={[0.03, 0.03, 0.8, 8]} />
+                 <meshPhysicalMaterial color={BODY_COLOR} />
+               </mesh>
                <mesh position={[0, -0.4, 0]}>
                  <sphereGeometry args={[0.08, 8, 8]} />
                  <meshPhysicalMaterial color={MANE_COLOR} />

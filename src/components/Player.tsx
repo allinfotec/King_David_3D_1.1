@@ -30,6 +30,7 @@ export function Player() {
     right: false,
     jump: false,
     dash: false,
+    block: false,
   });
   
   const joystick = useRef({ x: 0, y: 0 });
@@ -100,6 +101,7 @@ export function Player() {
         case 'KeyS': keys.current.backward = true; break;
         case 'KeyA': keys.current.left = true; break;
         case 'KeyD': keys.current.right = true; break;
+        case 'KeyE': keys.current.block = true; break;
         case 'Space': 
             if (!keys.current.jump) {
                 lastJumpPressedTime.current = Date.now();
@@ -142,6 +144,7 @@ export function Player() {
         case 'KeyS': keys.current.backward = false; break;
         case 'KeyA': keys.current.left = false; break;
         case 'KeyD': keys.current.right = false; break;
+        case 'KeyE': keys.current.block = false; break;
         case 'Space': keys.current.jump = false; break;
         case 'ShiftLeft': keys.current.dash = false; break;
       }
@@ -168,11 +171,16 @@ export function Player() {
         setWeapon(e.detail);
     };
 
+    const handleBlockStart = () => { keys.current.block = true; };
+    const handleBlockEnd = () => { keys.current.block = false; };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     window.addEventListener('joystickMove', handleJoystickMove as EventListener);
     window.addEventListener('aimJoystickMove', handleAimJoystickMove as EventListener);
     window.addEventListener('dash', handleDash);
+    window.addEventListener('blockStart', handleBlockStart);
+    window.addEventListener('blockEnd', handleBlockEnd);
     window.addEventListener('weaponSelect', handleWeaponSelect as EventListener);
     
     return () => {
@@ -181,6 +189,8 @@ export function Player() {
       window.removeEventListener('joystickMove', handleJoystickMove as EventListener);
       window.removeEventListener('aimJoystickMove', handleAimJoystickMove as EventListener);
       window.removeEventListener('dash', handleDash);
+      window.removeEventListener('blockStart', handleBlockStart);
+      window.removeEventListener('blockEnd', handleBlockEnd);
       window.removeEventListener('weaponSelect', handleWeaponSelect as EventListener);
     };
   }, []); // Empty dependency array for stable input handling
@@ -355,6 +365,16 @@ export function Player() {
   const rollGroup = useRef<THREE.Group>(null);
   const rollState = useRef({ active: false, startTime: 0, direction: new THREE.Vector3() });
   const doubleJumpState = useRef({ active: false, startTime: 0 });
+  const staggerState = useRef({ active: false, startTime: 0 });
+  const prevHealth = useRef(health);
+
+  useEffect(() => {
+      if (health < prevHealth.current && health > 0) {
+          // Took damage
+          staggerState.current = { active: true, startTime: Date.now() };
+      }
+      prevHealth.current = health;
+  }, [health]);
 
   // Gamepad state
   const gamepadState = useRef({
@@ -497,8 +517,10 @@ export function Player() {
         playerMesh.current.rotation.y += rotDiff * (1 - Math.exp(-10 * delta));
     }
 
+    const currentSpeed = keys.current.block ? SPEED * 0.4 : SPEED;
+
     if (direction.length() > 0) {
-      direction.normalize().multiplyScalar(SPEED);
+      direction.normalize().multiplyScalar(currentSpeed);
       direction.multiplyScalar(Math.min(inputVector.length(), 1)); 
     }
 
@@ -580,6 +602,28 @@ export function Player() {
         }
     }
 
+    // Stagger Animation Logic
+    if (staggerState.current.active) {
+        const elapsed = Date.now() - staggerState.current.startTime;
+        const progress = elapsed / 300; // 300ms stagger duration
+        
+        if (progress < 1) {
+            if (playerMesh.current) {
+                // Shake and lean back
+                playerMesh.current.rotation.x = Math.sin(progress * Math.PI) * -0.3;
+                playerMesh.current.rotation.z = Math.sin(progress * Math.PI * 4) * 0.1; // Shake
+            }
+        } else {
+            staggerState.current.active = false;
+            if (playerMesh.current) {
+                // Return to normal rotation is handled by the look-at-camera logic, 
+                // but we should reset X and Z
+                playerMesh.current.rotation.x = 0;
+                playerMesh.current.rotation.z = 0;
+            }
+        }
+    }
+
     // Apply velocity (keep Y velocity for gravity)
     // Let's try: If recently dashed, let physics handle it.
     if (Date.now() - lastDash < 200) {
@@ -588,6 +632,12 @@ export function Player() {
         const isGrounded = Math.abs(vel.y) < 0.1;
         const ACCEL = isGrounded ? 15 : 5; // Less acceleration in air
         const DECEL = isGrounded ? 15 : 2;  // Less deceleration in air
+        
+        // Update blocking state in store
+        const store = useStore.getState();
+        if (store.isBlocking !== keys.current.block) {
+            store.setBlocking(keys.current.block);
+        }
         
         let newX = vel.x;
         let newZ = vel.z;
@@ -746,14 +796,16 @@ export function Player() {
             rightLeg.current.rotation.x = Math.sin(time * freq + Math.PI) * amp;
             
             // Arms - Opposite to legs
-            leftArm.current.rotation.x = Math.sin(time * freq + Math.PI) * amp;
-            leftArm.current.rotation.z = 0.15; // More outward angle
+            if (!keys.current.block) {
+                leftArm.current.rotation.x = Math.sin(time * freq + Math.PI) * amp;
+                leftArm.current.rotation.z = 0.15; // More outward angle
+            }
             
             // Body Bobbing - More noticeable
             playerMesh.current.position.y = -0.8 + Math.abs(Math.sin(time * freq)) * 0.08;
             
-            // Right arm follows walk cycle unless attacking
-            if (!isAttacking) {
+            // Right arm follows walk cycle unless attacking or blocking
+            if (!isAttacking && !keys.current.block) {
                 rightArm.current.rotation.x = Math.sin(time * freq) * amp;
                 rightArm.current.rotation.z = -0.15; // More outward angle
             }
@@ -766,12 +818,26 @@ export function Player() {
             leftLeg.current.rotation.x = THREE.MathUtils.lerp(leftLeg.current.rotation.x, 0, lerpFactor);
             rightLeg.current.rotation.x = THREE.MathUtils.lerp(rightLeg.current.rotation.x, 0, lerpFactor);
             
-            leftArm.current.rotation.x = THREE.MathUtils.lerp(leftArm.current.rotation.x, 0, lerpFactor);
-            leftArm.current.rotation.z = THREE.MathUtils.lerp(leftArm.current.rotation.z, 0.1, lerpFactor);
+            if (!keys.current.block) {
+                leftArm.current.rotation.x = THREE.MathUtils.lerp(leftArm.current.rotation.x, 0, lerpFactor);
+                leftArm.current.rotation.z = THREE.MathUtils.lerp(leftArm.current.rotation.z, 0.1, lerpFactor);
+            }
 
-            if (!isAttacking) {
+            if (!isAttacking && !keys.current.block) {
                 rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, 0, lerpFactor);
                 rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, -0.1, lerpFactor);
+            }
+        }
+
+        // Block Animation
+        if (keys.current.block) {
+            const blockLerp = 1 - Math.exp(-20 * delta);
+            leftArm.current.rotation.x = THREE.MathUtils.lerp(leftArm.current.rotation.x, -Math.PI * 0.6, blockLerp);
+            leftArm.current.rotation.z = THREE.MathUtils.lerp(leftArm.current.rotation.z, 0.5, blockLerp);
+            
+            if (!isAttacking) {
+                rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, -Math.PI * 0.6, blockLerp);
+                rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, -0.5, blockLerp);
             }
         }
 
