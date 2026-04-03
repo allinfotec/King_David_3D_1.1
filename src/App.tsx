@@ -24,12 +24,14 @@ function Spawner() {
   const setPhaseMessage = useStore((state) => state.setPhaseMessage);
   const nextPhase = useStore((state) => state.nextPhase);
   const isTransitioningPhase = useStore((state) => state.isTransitioningPhase);
+  const retryCount = useStore((state) => state.retryCount);
   
   const stateRef = useRef({
       totalSpawnedInPhase: 0,
       nextWaveTime: 0,
       spawning: false,
       currentPhase: 1,
+      currentRetryCount: 0,
       isTransitioning: false
   });
 
@@ -38,9 +40,10 @@ function Spawner() {
     
     const state = stateRef.current;
     
-    // Reset state if phase changed
-    if (state.currentPhase !== phase) {
+    // Reset state if phase changed or retryCount changed
+    if (state.currentPhase !== phase || state.currentRetryCount !== retryCount) {
       state.currentPhase = phase;
+      state.currentRetryCount = retryCount;
       state.totalSpawnedInPhase = 0;
       state.nextWaveTime = 0;
       state.spawning = false;
@@ -86,6 +89,7 @@ function Spawner() {
       } else if (phase === 3) {
         setPhaseMessage("VITÓRIA! O LEÃO FOI DERROTADO!");
         setTimeout(() => {
+          document.exitPointerLock();
           useStore.getState().setStoryScreen(9);
           useStore.getState().setPhaseMessage(null);
         }, 3000);
@@ -129,7 +133,7 @@ function Spawner() {
 }
 
 function UI() {
-  const { health, score, isPaused, reset, togglePause, enemies, phase, phaseMessage, isWalkingHome } = useStore();
+  const { health, score, isPaused, reset, retryPhase, togglePause, enemies, phase, phaseMessage, isWalkingHome } = useStore();
 
   useEffect(() => {
     if (health <= 0) {
@@ -177,8 +181,11 @@ function UI() {
           <p className="text-2xl mb-8">Pontuação: {score}</p>
           <button 
             onClick={() => {
-              reset();
-              window.location.reload();
+              retryPhase();
+              setTimeout(() => {
+                const canvas = document.querySelector('canvas');
+                canvas?.requestPointerLock();
+              }, 100);
             }}
             className="px-8 py-4 bg-white text-black font-bold rounded hover:bg-gray-200"
           >
@@ -691,10 +698,11 @@ export default function App() {
   const isPaused = useStore((state) => state.isPaused);
   const isStarted = useStore((state) => state.isStarted);
   const health = useStore((state) => state.health);
+  const storyScreen = useStore((state) => state.storyScreen);
 
   return (
     <div className="w-full h-screen bg-black">
-      {!isStarted && <StoryScreen />}
+      <StoryScreen />
       
       {isStarted && (
         <>
@@ -751,11 +759,11 @@ export default function App() {
               {/* Rim light for characters */}
               <spotLight position={[-10, 10, -10]} angle={0.5} intensity={1.5} color="#88ccff" />
 
-              <Physics gravity={[0, -9.81, 0]} paused={isPaused || health <= 0}>
+              <Physics gravity={[0, -9.81, 0]} paused={isPaused || health <= 0 || storyScreen !== 0}>
                 <GameContent />
               </Physics>
               
-              <PointerLockControls enabled={health > 0 && !isPaused} />
+              <PointerLockControls enabled={health > 0 && !isPaused && storyScreen === 0} />
               <TouchCameraControls />
               
               {/* Post-processing effects */}

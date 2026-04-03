@@ -35,6 +35,7 @@ interface GameState {
   isTransitioningPhase: boolean;
   isWalkingHome: boolean;
   storyScreen: number;
+  retryCount: number;
   stones: Stone[];
   enemies: Enemy[];
   effects: Effect[];
@@ -49,6 +50,8 @@ interface GameState {
   startGame: () => void;
   resumeGame: () => void;
   reset: () => void;
+  jumpToPhase: (phase: number) => void;
+  retryPhase: () => void;
   shootStone: (position: [number, number, number], velocity: [number, number, number]) => void;
   removeStone: (id: string) => void;
   spawnEnemy: (position: [number, number, number], type: 'wolf' | 'bear' | 'lion', health: number) => void;
@@ -77,6 +80,7 @@ export const useStore = create<GameState>((set) => ({
   isTransitioningPhase: false,
   isWalkingHome: false,
   storyScreen: 1,
+  retryCount: 0,
   stones: [],
   enemies: [],
   effects: [],
@@ -93,6 +97,8 @@ export const useStore = create<GameState>((set) => ({
   startGame: () => set({ isStarted: true, health: 100, score: 0, isPaused: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, storyScreen: 0, stones: [], enemies: [], effects: [], targetId: null }),
   resumeGame: () => set({ isStarted: true, isPaused: false, storyScreen: 0, stones: [], enemies: [], effects: [] }),
   reset: () => set({ health: 100, score: 0, isPaused: false, isDodging: false, isBlocking: false, isStarted: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, storyScreen: 1, stones: [], enemies: [], effects: [], targetId: null }),
+  jumpToPhase: (phase) => set({ isStarted: true, health: 100, score: 0, isPaused: false, phase: phase, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, storyScreen: 0, stones: [], enemies: [], effects: [], targetId: null }),
+  retryPhase: () => set((state) => ({ health: 100, isPaused: false, isDodging: false, isBlocking: false, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, stones: [], enemies: [], effects: [], targetId: null, retryCount: state.retryCount + 1 })),
   shootStone: (position, velocity) => set((state) => ({
     stones: [...state.stones, { id: nanoid(), position, velocity }]
   })),

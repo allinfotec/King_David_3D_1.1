@@ -1,6 +1,7 @@
-import { useRef, useState, useEffect, createRef } from 'react';
+import { useRef, useState, useEffect, createRef, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useRapier, RigidBody, CapsuleCollider, RapierRigidBody } from '@react-three/rapier';
+import { Line } from '@react-three/drei';
 import * as THREE from 'three';
 import { useStore } from '../store';
 import { enemyRefs } from './Enemy';
@@ -17,10 +18,23 @@ export function Player() {
   const { camera, scene } = useThree();
   const { rapier, world } = useRapier();
   const [lastShot, setLastShot] = useState(0);
-  const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health } = useStore();
+  const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health, retryCount } = useStore();
   const playerMesh = useRef<THREE.Group>(null);
   const [weapon, setWeapon] = useState<'sling' | 'knife'>('sling');
   const [isAttacking, setIsAttacking] = useState(false);
+  const [trajectoryPoints, setTrajectoryPoints] = useState<THREE.Vector3[]>([]);
+  
+  useEffect(() => {
+    if (playerRef.current) {
+        playerRef.current.setTranslation({ x: 0, y: 5, z: 0 }, true);
+        playerRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        playerRef.current.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    }
+  }, [retryCount]);
+  
+  const trajectoryGeometry = useMemo(() => {
+    return new THREE.BufferGeometry().setFromPoints(trajectoryPoints);
+  }, [trajectoryPoints]);
   
   // Movement state
   const keys = useRef({
@@ -897,19 +911,92 @@ export function Player() {
             }
         }
     }
+
+    // Trajectory calculation
+    if (weapon === 'sling') {
+      const pos = playerRef.current.translation();
+      const direction = new THREE.Vector3();
+      camera.getWorldDirection(direction);
+      
+      const targetId = useStore.getState().targetId;
+      let targetPoint = new THREE.Vector3(pos.x, pos.y, pos.z).add(direction.clone().multiplyScalar(100));
+      
+      const enemies = useStore.getState().enemies;
+      const targetEnemy = enemies.find(e => e.id === targetId);
+
+      if (targetEnemy) {
+          const rb = enemyRefs.get(targetId);
+          if (rb) {
+              const ePos = rb.translation();
+              targetPoint = new THREE.Vector3(ePos.x, ePos.y + 0.5, ePos.z);
+          } else {
+              targetPoint = new THREE.Vector3(targetEnemy.position[0], targetEnemy.position[1] + 0.5, targetEnemy.position[2]);
+          }
+      }
+
+      const right = new THREE.Vector3().crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize();
+      const spawnPos = new THREE.Vector3(pos.x, pos.y + 1.0, pos.z)
+          .add(direction.clone().normalize().multiplyScalar(0.5))
+          .add(right.multiplyScalar(0.2));
+
+      const velocityDir = new THREE.Vector3().subVectors(targetPoint, spawnPos).normalize();
+      velocityDir.y += 0.02; 
+      const velocity = velocityDir.multiplyScalar(STONE_SPEED);
+
+      const points = [];
+      const gravity = -9.81;
+      const timeStep = 0.05;
+      for (let i = 0; i < 30; i++) {
+        const t = i * timeStep;
+        const x = spawnPos.x + velocity.x * t;
+        const y = spawnPos.y + velocity.y * t + 0.5 * gravity * t * t;
+        const z = spawnPos.z + velocity.z * t;
+        points.push(new THREE.Vector3(x, y, z));
+        if (y < 0) {
+            // Interpolate to find exact ground hit
+            if (i > 0) {
+                const prevT = (i - 1) * timeStep;
+                const prevY = spawnPos.y + velocity.y * prevT + 0.5 * gravity * prevT * prevT;
+                const fraction = prevY / (prevY - y);
+                const exactT = prevT + fraction * timeStep;
+                const exactX = spawnPos.x + velocity.x * exactT;
+                const exactZ = spawnPos.z + velocity.z * exactT;
+                points[points.length - 1] = new THREE.Vector3(exactX, 0, exactZ);
+            }
+            break;
+        }
+      }
+      setTrajectoryPoints(points);
+    } else {
+      setTrajectoryPoints([]);
+    }
   });
 
   return (
-    <RigidBody
-      ref={playerRef}
-      colliders={false}
-      mass={1}
-      type="dynamic"
-      position={[0, 5, 0]}
-      enabledRotations={[false, false, false]}
-      lockRotations
-      userData={{ type: 'player' }}
-    >
+    <>
+      {weapon === 'sling' && trajectoryPoints.length > 1 && (
+        <Line
+          points={trajectoryPoints}
+          color="white"
+          lineWidth={2}
+          dashed={true}
+          dashScale={50}
+          dashSize={1}
+          dashOffset={0}
+          opacity={0.5}
+          transparent
+        />
+      )}
+      <RigidBody
+        ref={playerRef}
+        colliders={false}
+        mass={1}
+        type="dynamic"
+        position={[0, 5, 0]}
+        enabledRotations={[false, false, false]}
+        lockRotations
+        userData={{ type: 'player' }}
+      >
       <CapsuleCollider args={[0.75, 0.5]} />
       
       {/* Visible Player Model - Young David - High Res */}
@@ -1250,5 +1337,6 @@ export function Player() {
         </group>
       </group>
     </RigidBody>
+    </>
   );
 }

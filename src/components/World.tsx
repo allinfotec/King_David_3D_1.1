@@ -10,22 +10,47 @@ function Passage() {
   const isWalkingHome = useStore((state) => state.isWalkingHome);
   const finishGame = useStore((state) => state.finishGame);
   const arrowRef = useRef<THREE.Group>(null);
+  const smallArrowRef = useRef<THREE.Group>(null);
+  const isFinishing = useRef(false);
 
   useFrame((state) => {
     if (!isWalkingHome) return;
 
-    // Animate arrow
+    // Animate giant floating arrow
     if (arrowRef.current) {
-      arrowRef.current.position.y = 10 + Math.sin(state.clock.elapsedTime * 4) * 1;
+      arrowRef.current.position.y = 15 + Math.sin(state.clock.elapsedTime * 3) * 2;
+      arrowRef.current.rotation.y = state.clock.elapsedTime;
+    }
+
+    // Update small arrow to be in front of the player and point to the passage
+    if (smallArrowRef.current && playerRef.current) {
+      const pos = playerRef.current.translation();
+      
+      // Target is the passage at [0, 0, -90]
+      const target = new THREE.Vector3(0, pos.y, -90);
+      const playerPos = new THREE.Vector3(pos.x, pos.y, pos.z);
+      
+      // Direction from player to passage
+      const dir = new THREE.Vector3().subVectors(target, playerPos).normalize();
+      
+      // Place small arrow 3 units in front of the player
+      smallArrowRef.current.position.copy(playerPos).add(dir.multiplyScalar(3));
+      smallArrowRef.current.position.y += 1.5 + Math.sin(state.clock.elapsedTime * 5) * 0.2; // Floating effect
+      
+      // Make it point to the passage
+      smallArrowRef.current.lookAt(target);
     }
 
     // Check player position
-    if (playerRef.current) {
+    if (playerRef.current && !isFinishing.current) {
       const pos = playerRef.current.translation();
       // If player is close to the passage
-      if (pos.z < -85 && pos.x > -15 && pos.x < 15) {
-        finishGame();
+      if (pos.z < -70 && pos.x > -30 && pos.x < 30) {
+        isFinishing.current = true;
         document.exitPointerLock();
+        setTimeout(() => {
+          finishGame();
+        }, 100);
       }
     }
   });
@@ -33,27 +58,42 @@ function Passage() {
   if (!isWalkingHome) return null;
 
   return (
-    <group position={[0, -2, -90]}>
-      {/* Passage Rocks */}
-      <Rock position={[-15, 0, 0]} scale={5} />
-      <Rock position={[15, 0, 0]} scale={5} />
-      <Rock position={[-25, 0, 5]} scale={4} />
-      <Rock position={[25, 0, 5]} scale={4} />
-      
-      {/* Glowing Path */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.1, 10]}>
-        <planeGeometry args={[20, 40]} />
-        <meshBasicMaterial color="#ffffaa" transparent opacity={0.3} />
-      </mesh>
-
-      {/* Arrow */}
-      <group ref={arrowRef} position={[0, 10, 0]}>
-        <mesh rotation={[Math.PI, 0, 0]}>
-          <coneGeometry args={[2, 4, 4]} />
-          <meshBasicMaterial color="#ffff00" />
+    <>
+      {/* Small Floating Arrow near the player */}
+      <group ref={smallArrowRef}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[0.3, 1, 8]} />
+          <meshStandardMaterial color="#ffff00" emissive="#ffff00" emissiveIntensity={2} transparent opacity={0.8} />
         </mesh>
+        <pointLight intensity={2} color="#ffff00" distance={5} />
       </group>
-    </group>
+
+      {/* The Passage at the back */}
+      <group position={[0, -2, -90]}>
+        {/* Passage Rocks */}
+        <Rock position={[-15, 0, 0]} scale={8} />
+        <Rock position={[15, 0, 0]} scale={8} />
+        <Rock position={[-25, 0, 5]} scale={6} />
+        <Rock position={[25, 0, 5]} scale={6} />
+        <Rock position={[-35, 0, 10]} scale={5} />
+        <Rock position={[35, 0, 10]} scale={5} />
+        
+        {/* Glowing Path */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.1, 10]}>
+          <planeGeometry args={[20, 40]} />
+          <meshBasicMaterial color="#ffffaa" transparent opacity={0.3} />
+        </mesh>
+
+        {/* Giant Floating Arrow */}
+        <group ref={arrowRef} position={[0, 15, 0]}>
+          <mesh rotation={[Math.PI, 0, 0]}>
+            <coneGeometry args={[4, 8, 4]} />
+            <meshStandardMaterial color="#ffff00" emissive="#ffff00" emissiveIntensity={2} />
+          </mesh>
+          <pointLight position={[0, -5, 0]} intensity={5} color="#ffff00" distance={50} />
+        </group>
+      </group>
+    </>
   );
 }
 

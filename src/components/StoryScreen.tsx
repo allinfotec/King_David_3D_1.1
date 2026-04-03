@@ -7,7 +7,7 @@ const STORY_SCREENS = [
     id: 1,
     bgPrompt: "beautiful green hills and fields with a shepherd tending sheep",
     text: "",
-    buttons: ['next']
+    buttons: ['start_intro']
   },
   {
     id: 2,
@@ -59,7 +59,7 @@ const STORY_SCREENS = [
   },
   {
     id: 10,
-    bgPrompt: "Inside Jesse's house in Bethlehem, rustic wooden door, simple interior with lit oil lamps. Elderly prophet Samuel holding a horn of oil. Young David kneeling, brown skin, short brown hair, simple tunic. Older brothers in background looking with admiration, cinematic lighting",
+    bgPrompt: "Prophet Samuel anointing young David with oil in a rustic house, biblical scene, cinematic lighting, masterpiece",
     text: "Deus via o coração do jovem pastor. Quando o profeta Samuel visitou sua casa, entre todos os filhos de Jessé, Deus escolheu o menor para ser o futuro rei de Israel, ungindo-o com óleo.",
     buttons: ['finish']
   }
@@ -78,7 +78,7 @@ export function StoryScreen() {
   if (!screenData) return null;
 
   const handleAction = (action: string) => {
-    if (action === 'next') {
+    if (action === 'next' || action === 'start_intro') {
       setStoryScreen(storyScreen + 1);
     } else if (action === 'prev') {
       setStoryScreen(storyScreen - 1);
@@ -90,6 +90,12 @@ export function StoryScreen() {
       }, 100);
     } else if (action === 'fight_bear' || action === 'fight_lion') {
       resumeGame();
+      setTimeout(() => {
+        const canvas = document.querySelector('canvas');
+        canvas?.requestPointerLock();
+      }, 100);
+    } else if (action === 'jump_lion') {
+      useStore.getState().jumpToPhase(3);
       setTimeout(() => {
         const canvas = document.querySelector('canvas');
         canvas?.requestPointerLock();
@@ -233,7 +239,7 @@ export function StoryScreen() {
               className="px-8 py-3 bg-yellow-600/80 border-2 border-yellow-400 rounded-full flex items-center gap-3 text-white font-bold hover:bg-yellow-500 transition-all hover:scale-105 backdrop-blur-sm shadow-[0_0_20px_rgba(234,179,8,0.5)]"
               style={{ fontFamily: "'Montserrat', sans-serif" }}
             >
-              IR PARA A PRÓXIMA FASE
+              FINALIZAR JOGO
               <ArrowRight size={24} />
             </button>
           )}
@@ -246,6 +252,17 @@ export function StoryScreen() {
             >
               IR PARA CASA
               <ArrowRight size={24} />
+            </button>
+          )}
+
+          {screenData.buttons.includes('start_intro') && (
+            <button 
+              onClick={() => handleAction('start_intro')}
+              className="px-8 py-3 bg-yellow-600/80 border-2 border-yellow-400 rounded-full flex items-center gap-3 text-white font-bold hover:bg-yellow-500 transition-all hover:scale-105 backdrop-blur-sm shadow-[0_0_20px_rgba(234,179,8,0.5)]"
+              style={{ fontFamily: "'Montserrat', sans-serif" }}
+            >
+              Iniciar o Jogo
+              <ChevronRight size={24} />
             </button>
           )}
 
