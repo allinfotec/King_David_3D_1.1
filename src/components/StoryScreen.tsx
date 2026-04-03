@@ -12,31 +12,31 @@ const STORY_SCREENS = [
   {
     id: 2,
     bgPrompt: "Hills of Judah at sunset, sheep grazing, small village in the distance, Bethlehem in miniature on the horizon, cinematic, highly detailed digital painting",
-    text: "Era Davi, filho de Jessé, o belemita, que estava no campo cuidando das ovelhas de seu pai. Enquanto pastoreava, Deus já observava o coração daquele jovem.",
+    text: "Era Davi, filho de Jessé, o belemita. Enquanto seus irmãos mais velhos treinavam para a guerra no exército do rei Saul, Davi passava seus dias nas colinas solitárias cuidando das ovelhas de seu pai.",
     buttons: ['prev', 'next']
   },
   {
     id: 3,
-    bgPrompt: "Inside Jesse's house in Bethlehem, rustic wooden door, simple interior with lit oil lamps. Elderly prophet Samuel holding a horn of oil. Young David kneeling, brown skin, short brown hair, simple tunic. Older brothers in background looking with admiration, cinematic lighting",
-    text: "Voltando do campo, Davi encontrou o profeta Samuel em sua casa. Entre todos os filhos de Jessé, Deus escolheu o menor, o pastor, para ser o futuro rei de Israel. Samuel ungiu Davi com óleo na presença de seus irmãos.",
+    bgPrompt: "Young David practicing with a sling. A stone flying towards a target on a tree. Dynamic angle, cinematic lighting, realistic",
+    text: "Nessa solidão, ele desenvolveu uma precisão mortal com sua funda para afastar predadores e uma fé inabalável, compondo salmos com sua harpa sob as estrelas.",
     buttons: ['prev', 'next']
   },
   {
     id: 4,
     bgPrompt: "Rocky pasture. A large gray wolf with glowing eyes approaching the flock. Young David in defensive position with a sling in hand. Sheep getting scared in background. Dust rising, slightly cloudy sky, cinematic",
-    text: "De volta ao pasto, um lobo feroz atacou o rebanho. Davi, confiante na proteção de Deus, enfrentou a fera para defender suas ovelhas.",
+    text: "A vida no pasto exigia coragem. Um dia, um lobo feroz atacou o rebanho. Davi, confiante na proteção de Deus, enfrentou a fera para defender suas ovelhas.",
     buttons: ['prev', 'fight_wolf']
   },
   {
     id: 5,
     bgPrompt: "Starry night. Young David sitting on a rock, holding a rustic harp. Sheep sleeping around. Small campfire. Silver moonlight, starlight, cinematic",
-    text: "Após vencer o lobo, Davi agradeceu a Deus com sua harpa. 'O Senhor é meu pastor', ele cantava. Mas novos desafios viriam com o amanhecer.",
+    text: "Após vencer o lobo, Davi agradeceu a Deus. 'O Senhor é meu pastor', ele cantava. Mas a vida no deserto exigia vigilância constante.",
     buttons: ['next']
   },
   {
     id: 6,
     bgPrompt: "Rocky canyon with dry vegetation. A huge brown bear standing on hind legs, roaring. Young David with a stone in his sling, ready to swing. Rising sun creating dramatic silhouettes, bear with visible claws, cinematic",
-    text: "Ao amanhecer, um urso saiu da caverna e investiu contra o rebanho. A força do inimigo era grande, mas maior era a fé do pastor.",
+    text: "Ao amanhecer, um urso colossal saiu da caverna e investiu contra o rebanho. A força do inimigo era aterrorizante, mas maior era a fé do pastor.",
     buttons: ['prev', 'fight_bear']
   },
   {
@@ -48,20 +48,20 @@ const STORY_SCREENS = [
   {
     id: 8,
     bgPrompt: "Reddish twilight. A huge mountain lion with a massive mane about to attack. Young David running towards the lion without fear. Silhouette of the lion against the setting sun, determined expression on David, cinematic",
-    text: "Um leão poderoso surgiu das sombras. Diferente dos outros, este rugia com fúria. Davi lembrou-se da unção de Samuel e soube que este era seu maior teste até então.",
+    text: "Um leão poderoso surgiu das sombras. Diferente dos outros, este rugia com fúria. Davi soube que este era seu maior teste até então.",
     buttons: ['prev', 'fight_lion']
   },
   {
     id: 9,
-    bgPrompt: "Golden sunset. Young David standing on top of a hill, safe flock behind him. His face is illuminated. Bodies of wolf, bear, and lion fallen in different parts of the landscape far away. Sun rays piercing through clouds, serene and confident expression, cinematic",
-    text: "Lobo, urso e leão caíram diante do servo de Deus. O pastor estava preparado. Não apenas para cuidar de ovelhas, mas para enfrentar gigantes.",
-    buttons: ['next']
+    bgPrompt: "Golden sunset. Young David standing victorious over the defeated lion. Sun rays piercing through clouds, serene and confident expression, cinematic",
+    text: "Parabéns, Davi! Você provou sua coragem e fé ao derrotar o leão. Uma passagem se abriu nas montanhas, siga a luz para voltar para casa.",
+    buttons: ['walk_home']
   },
   {
     id: 10,
-    bgPrompt: "Same hill as before, but David looks stronger. On the horizon, a Philistine army camped and a giant (Goliath) stands out. A messenger running towards David. Contrast between peaceful pasture and war camp in background, cinematic",
-    text: "O rei Saul precisava de alguém para tocar harpa e acalmar seu coração. Mas Deus precisava de um guerreiro de fé. O pastor estava pronto para escrever a história.",
-    buttons: ['prev', 'finish']
+    bgPrompt: "Inside Jesse's house in Bethlehem, rustic wooden door, simple interior with lit oil lamps. Elderly prophet Samuel holding a horn of oil. Young David kneeling, brown skin, short brown hair, simple tunic. Older brothers in background looking with admiration, cinematic lighting",
+    text: "Deus via o coração do jovem pastor. Quando o profeta Samuel visitou sua casa, entre todos os filhos de Jessé, Deus escolheu o menor para ser o futuro rei de Israel, ungindo-o com óleo.",
+    buttons: ['finish']
   }
 ];
 
@@ -84,12 +84,22 @@ export function StoryScreen() {
       setStoryScreen(storyScreen - 1);
     } else if (action === 'fight_wolf') {
       startGame();
-      const canvas = document.querySelector('canvas');
-      canvas?.requestPointerLock();
+      setTimeout(() => {
+        const canvas = document.querySelector('canvas');
+        canvas?.requestPointerLock();
+      }, 100);
     } else if (action === 'fight_bear' || action === 'fight_lion') {
       resumeGame();
-      const canvas = document.querySelector('canvas');
-      canvas?.requestPointerLock();
+      setTimeout(() => {
+        const canvas = document.querySelector('canvas');
+        canvas?.requestPointerLock();
+      }, 100);
+    } else if (action === 'walk_home') {
+      useStore.getState().startWalkingHome();
+      setTimeout(() => {
+        const canvas = document.querySelector('canvas');
+        canvas?.requestPointerLock();
+      }, 100);
     } else if (action === 'finish') {
       reset();
       window.location.reload();
@@ -162,6 +172,28 @@ export function StoryScreen() {
         </div>
 
         <div className="pointer-events-auto flex gap-4">
+          {screenData.buttons.includes('jump_bear') && (
+            <button 
+              onClick={() => handleAction('jump_bear')}
+              className="px-6 py-3 bg-blue-900/80 border-2 border-blue-500 rounded-full flex items-center gap-3 text-white font-bold hover:bg-blue-800 transition-all hover:scale-105 backdrop-blur-sm shadow-[0_0_20px_rgba(59,130,246,0.5)]"
+              style={{ fontFamily: "'Montserrat', sans-serif" }}
+            >
+              <ShieldAlert size={20} />
+              FASE URSO
+            </button>
+          )}
+
+          {screenData.buttons.includes('jump_lion') && (
+            <button 
+              onClick={() => handleAction('jump_lion')}
+              className="px-6 py-3 bg-purple-900/80 border-2 border-purple-500 rounded-full flex items-center gap-3 text-white font-bold hover:bg-purple-800 transition-all hover:scale-105 backdrop-blur-sm shadow-[0_0_20px_rgba(168,85,247,0.5)]"
+              style={{ fontFamily: "'Montserrat', sans-serif" }}
+            >
+              <ShieldAlert size={20} />
+              FASE LEÃO
+            </button>
+          )}
+
           {screenData.buttons.includes('fight_wolf') && (
             <button 
               onClick={() => handleAction('fight_wolf')}
@@ -202,6 +234,17 @@ export function StoryScreen() {
               style={{ fontFamily: "'Montserrat', sans-serif" }}
             >
               IR PARA A PRÓXIMA FASE
+              <ArrowRight size={24} />
+            </button>
+          )}
+
+          {screenData.buttons.includes('walk_home') && (
+            <button 
+              onClick={() => handleAction('walk_home')}
+              className="px-8 py-3 bg-yellow-600/80 border-2 border-yellow-400 rounded-full flex items-center gap-3 text-white font-bold hover:bg-yellow-500 transition-all hover:scale-105 backdrop-blur-sm shadow-[0_0_20px_rgba(234,179,8,0.5)]"
+              style={{ fontFamily: "'Montserrat', sans-serif" }}
+            >
+              IR PARA CASA
               <ArrowRight size={24} />
             </button>
           )}

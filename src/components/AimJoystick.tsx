@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 interface AimJoystickProps {
   onAim: (x: number, y: number) => void;
@@ -14,11 +14,40 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const touchStart = useRef({ x: 0, y: 0 });
   const pointerId = useRef<number | null>(null);
+  const onAimRef = useRef(onAim);
+  const onAttackRef = useRef(onAttack);
+
+  useEffect(() => {
+    onAimRef.current = onAim;
+    onAttackRef.current = onAttack;
+  }, [onAim, onAttack]);
+
+  useEffect(() => {
+    const handleGlobalPointerUp = (e: PointerEvent) => {
+      if (pointerId.current === e.pointerId) {
+        pointerId.current = null;
+        setActive(false);
+        setPosition({ x: 0, y: 0 });
+        onAimRef.current(0, 0);
+        onAttackRef.current();
+      }
+    };
+    
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+    window.addEventListener('pointercancel', handleGlobalPointerUp);
+    
+    return () => {
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+      window.removeEventListener('pointercancel', handleGlobalPointerUp);
+    };
+  }, []);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (pointerId.current !== null) return;
     
-    e.currentTarget.setPointerCapture(e.pointerId);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (err) {}
     pointerId.current = e.pointerId;
     
     touchStart.current = { x: e.clientX, y: e.clientY };
@@ -75,7 +104,12 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerId !== pointerId.current) return;
     
-    e.currentTarget.releasePointerCapture(e.pointerId);
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch (err) {}
+    
     pointerId.current = null;
     setActive(false);
     setPosition({ x: 0, y: 0 });
@@ -91,6 +125,7 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
+      onPointerLeave={handlePointerUp}
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* The actual button content */}

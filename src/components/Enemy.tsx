@@ -25,9 +25,18 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   
   const [isStaggered, setIsStaggered] = useState(false);
   const [isDead, setIsDead] = useState(false);
+  const isDeadRef = useRef(false);
   const [isDodgingEnemy, setIsDodgingEnemy] = useState(false);
   const [isBlocking, setIsBlocking] = useState(false);
   const dodgeDir = useRef<number>(0);
+  const tailRef = useRef<THREE.Group>(null);
+  const jawRef = useRef<THREE.Group>(null);
+  const headRef = useRef<THREE.Group>(null);
+  const bodyRef = useRef<THREE.Mesh>(null);
+  const legFLRef = useRef<THREE.Group>(null);
+  const legFRRef = useRef<THREE.Group>(null);
+  const legBLRef = useRef<THREE.Group>(null);
+  const legBRRef = useRef<THREE.Group>(null);
 
   useEffect(() => {
     if (rigidBody.current) {
@@ -39,23 +48,27 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   }, [id, rigidBody.current]);
   
   // AI State
-  const [state, setState] = useState<'chase' | 'search' | 'flank' | 'evade' | 'wait'>('chase');
+  const [state, setState] = useState<'chase' | 'search' | 'flank' | 'evade' | 'wait' | 'patrol' | 'flee' | 'berserk'>('patrol');
   const searchTarget = useRef<THREE.Vector3 | null>(null);
+  const patrolTarget = useRef<THREE.Vector3 | null>(null);
   const flankAngle = useRef<number>(Math.random() > 0.5 ? 1 : -1);
   const lastStateChange = useRef<number>(0);
   const lastSeenPlayer = useRef<number>(0);
 
   const lastAttackTime = useRef<number>(0);
+  const lastRoarTime = useRef<number>(0);
   const ATTACK_COOLDOWN = type === 'bear' ? 3000 : type === 'lion' ? 1500 : 2000;
   const isAttacking = useRef(false);
 
   // Stats based on type
-  const ENEMY_SPEED = type === 'bear' ? 3 : type === 'lion' ? 5.5 : 4;
+  const ENEMY_SPEED = type === 'bear' ? 4.5 : type === 'lion' ? 8.5 : 6.0; // Increased speeds
   const ATTACK_DAMAGE = type === 'bear' ? 25 : type === 'lion' ? 35 : 15;
-  const SCALE = type === 'bear' ? 1.2 : type === 'lion' ? 1.0 : 0.7;
-  const BODY_COLOR = type === 'bear' ? '#4a2e15' : type === 'lion' ? '#c29b0c' : '#2a2a2a';
-  const MANE_COLOR = type === 'bear' ? '#2e1c0d' : type === 'lion' ? '#8b4513' : '#0a0a0a';
-  const EYE_COLOR = type === 'bear' ? '#ff4400' : type === 'lion' ? '#ffaa00' : '#ff0000';
+  const SCALE = type === 'bear' ? 1.45 : type === 'lion' ? 1.5 : 0.95; // Increased wolf scale from 0.7 to 0.95
+  const BODY_COLOR = type === 'bear' ? '#4a2e15' : type === 'lion' ? '#f4d03f' : '#45454a'; // Wolf grey
+  const MANE_COLOR = type === 'bear' ? '#2e1c0d' : type === 'lion' ? '#8b3a1a' : '#222225'; // Darker grey for wolf ruff
+  const EYE_COLOR = type === 'bear' ? '#ff4400' : type === 'lion' ? '#ffaa00' : '#ff2200'; // Piercing red/orange for wolf
+  const NOSE_COLOR = type === 'lion' ? '#3e2723' : '#111'; // Dark brown nose for lion
+  const TONGUE_COLOR = '#e91e63'; // Pink tongue
 
   // Listen for player attacks to trigger dodges/blocks
   useEffect(() => {
@@ -115,8 +128,13 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   }, [isDead, isStaggered, isDodgingEnemy, isBlocking]);
 
   useFrame((clockState, delta) => {
-    const { health: playerHealth } = useStore.getState();
+    const { health: playerHealth, isTransitioningPhase } = useStore.getState();
     if (!rigidBody.current || !playerRef.current || isPaused || playerHealth <= 0) return;
+
+    if (isTransitioningPhase && !isDead) {
+        rigidBody.current.setLinvel({ x: 0, y: rigidBody.current.linvel().y, z: 0 }, true);
+        return;
+    }
 
     if (isDead) {
       if (group.current) {
@@ -164,16 +182,46 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
     if (canSeePlayer) {
       lastSeenPlayer.current = now;
 
-      if (isLowHealth && state !== 'evade' && now - lastStateChange.current > 2000) {
-          // Evade when low health
-          setState('evade');
+      if (isLowHealth && state !== 'evade' && state !== 'flee' && state !== 'berserk' && now - lastStateChange.current > 2000) {
+          if (type === 'bear' || type === 'lion') {
+              setState('berserk');
+              if (type === 'lion') {
+                  // Loud berserk roar
+                  const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3');
+                  audio.volume = 1.0;
+                  audio.playbackRate = 0.4 + Math.random() * 0.1; // Very deep, menacing roar
+                  audio.play().catch(() => {});
+              } else if (type === 'bear') {
+                  // Bear berserk roar
+                  const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/218/218-preview.mp3');
+                  audio.volume = 1.0;
+                  audio.playbackRate = 0.5 + Math.random() * 0.1;
+                  audio.play().catch(() => {});
+              }
+          } else {
+              setState('flee');
+          }
           lastStateChange.current = now;
-      } else if (!isLowHealth && state !== 'chase' && state !== 'flank') {
+      } else if (!isLowHealth && state !== 'chase' && state !== 'flank' && state !== 'berserk') {
           // Play growl sound when spotting player
-          if (state === 'search') {
-              const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3');
-              audio.volume = type === 'bear' ? 0.6 : type === 'lion' ? 0.8 : 0.3;
-              audio.playbackRate = type === 'bear' ? 0.6 : type === 'lion' ? 0.9 : 1.5;
+          if (state === 'search' || state === 'patrol') {
+              let audioUrl = 'https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3';
+              if (type === 'bear') {
+                  audioUrl = 'https://assets.mixkit.co/active_storage/sfx/218/218-preview.mp3';
+              } else if (type === 'wolf') {
+                  audioUrl = 'https://assets.mixkit.co/active_storage/sfx/215/215-preview.mp3';
+              }
+              const audio = new Audio(audioUrl);
+              if (type === 'lion') {
+                  audio.volume = 1.0;
+                  audio.playbackRate = 0.5 + Math.random() * 0.2; // Deep lion roar
+              } else if (type === 'bear') {
+                  audio.volume = 0.8;
+                  audio.playbackRate = 0.6 + Math.random() * 0.2; // Bear growl
+              } else {
+                  audio.volume = 0.5;
+                  audio.playbackRate = 1.2 + Math.random() * 0.3; // Wolf snarl
+              }
               audio.play().catch(() => {});
           }
           setState('chase');
@@ -190,7 +238,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
       }
 
       // Coordinated attacks: Wait if another enemy is already attacking
-      if (state === 'chase' && distToPlayer < 6 && now - lastStateChange.current > 1000) {
+      if ((state === 'chase' || state === 'berserk') && distToPlayer < 6 && now - lastStateChange.current > 1000) {
           let isAnotherAttacking = false;
           enemyRefs.forEach((ref, enemyId) => {
               if (enemyId !== id) {
@@ -202,7 +250,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
               }
           });
 
-          if (isAnotherAttacking && Math.random() < 0.6) {
+          if (isAnotherAttacking && Math.random() < 0.6 && state !== 'berserk') {
               setState('wait');
               lastStateChange.current = now;
           }
@@ -227,13 +275,21 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
       }
       
       // Attack Logic
-      if (distToPlayer < 3 && !isAttacking.current && now - lastAttackTime.current > ATTACK_COOLDOWN) {
+      if (distToPlayer < 3 && !isAttacking.current && now - lastAttackTime.current > (state === 'berserk' ? ATTACK_COOLDOWN * 0.5 : ATTACK_COOLDOWN)) {
           isAttacking.current = true;
           
           // Wind up animation (visual only)
           if (group.current) {
-              group.current.position.y = 0.2;
-              group.current.rotation.x = -0.5; // Lean back
+              if (type === 'bear') {
+                  group.current.position.y = 1.0; // Rear up high
+                  group.current.rotation.x = -0.6; // Lean way back
+              } else if (type === 'lion') {
+                  group.current.position.y = -0.2; // Crouch low
+                  group.current.rotation.x = -0.3; // Lean back slightly
+              } else {
+                  group.current.position.y = 0.2;
+                  group.current.rotation.x = -0.5; // Lean back
+              }
           }
           
           setTimeout(() => {
@@ -243,11 +299,24 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                   const currentPos = rigidBody.current.translation();
                   const pPos = playerRef.current.translation();
                   const lungeDir = new THREE.Vector3(pPos.x - currentPos.x, 0, pPos.z - currentPos.z).normalize();
-                  rigidBody.current.applyImpulse({ x: lungeDir.x * 20, y: 2, z: lungeDir.z * 20 }, true);
+                  
+                  if (type === 'lion') {
+                      rigidBody.current.applyImpulse({ x: lungeDir.x * 30, y: 5, z: lungeDir.z * 30 }, true); // Stronger, higher pounce
+                  } else {
+                      rigidBody.current.applyImpulse({ x: lungeDir.x * 20, y: 2, z: lungeDir.z * 20 }, true);
+                  }
                   
                   // Visual Lunge
                   if (group.current) {
-                      group.current.rotation.x = 0.5; // Lean forward
+                      if (type === 'bear') {
+                          group.current.position.y = 0; // Slam down
+                          group.current.rotation.x = 0.6; // Slam forward
+                      } else if (type === 'lion') {
+                          group.current.position.y = 0.5; // Pounce up
+                          group.current.rotation.x = 0.4; // Lean forward
+                      } else {
+                          group.current.rotation.x = 0.5; // Lean forward
+                      }
                   }
 
                   // Check Hit
@@ -258,9 +327,15 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                       takeDamage(finalDamage);
                       
                       // Attack Sound
-                      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/215/215-preview.mp3'); 
-                      audio.volume = type === 'bear' ? 0.8 : type === 'lion' ? 1.0 : 0.6;
-                      audio.playbackRate = type === 'bear' ? 0.6 : type === 'lion' ? 0.9 : 1.5;
+                      let audioUrl = 'https://assets.mixkit.co/active_storage/sfx/215/215-preview.mp3';
+                      if (type === 'bear') {
+                          audioUrl = 'https://assets.mixkit.co/active_storage/sfx/218/218-preview.mp3';
+                      } else if (type === 'lion') {
+                          audioUrl = 'https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3';
+                      }
+                      const audio = new Audio(audioUrl); 
+                      audio.volume = type === 'bear' ? 0.9 : type === 'lion' ? 1.0 : 0.6;
+                      audio.playbackRate = type === 'bear' ? 0.7 + Math.random() * 0.2 : type === 'lion' ? 0.8 + Math.random() * 0.2 : 1.4 + Math.random() * 0.3;
                       audio.play().catch(() => {});
                       
                       if (isPlayerBlocking) {
@@ -297,6 +372,17 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
     if (!isAttacking.current) {
         if (state === 'chase') {
           moveDir.subVectors(playerPos, enemyPos).normalize();
+          
+          // Periodic roar for lion during chase
+          if (type === 'lion' && now - lastRoarTime.current > 4000) {
+              if (Math.random() < 0.4) { // 40% chance every 4 seconds
+                  const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3');
+                  audio.volume = 1.0;
+                  audio.playbackRate = 0.5; // Deeper, longer roar
+                  audio.play().catch(() => {});
+              }
+              lastRoarTime.current = now;
+          }
         } else if (state === 'flank') {
           // Move towards player but offset by an angle
           const toPlayer = new THREE.Vector3().subVectors(playerPos, enemyPos).normalize();
@@ -309,26 +395,39 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           // Circle the player slowly
           const toPlayer = new THREE.Vector3().subVectors(playerPos, enemyPos).normalize();
           moveDir.copy(toPlayer).applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
-        } else if (state === 'search') {
-          if (!searchTarget.current || new THREE.Vector3(enemyPos.x, 0, enemyPos.z).distanceTo(new THREE.Vector3(searchTarget.current.x, 0, searchTarget.current.z)) < 1) {
+        } else if (state === 'search' || state === 'patrol') {
+          const targetRef = state === 'patrol' ? patrolTarget : searchTarget;
+          const radius = state === 'patrol' ? 15 : 5;
+          if (!targetRef.current || new THREE.Vector3(enemyPos.x, 0, enemyPos.z).distanceTo(new THREE.Vector3(targetRef.current.x, 0, targetRef.current.z)) < 1) {
              const angle = Math.random() * Math.PI * 2;
-             const radius = 5 + Math.random() * 5;
-             searchTarget.current = new THREE.Vector3(
-               enemyPos.x + Math.cos(angle) * radius,
+             const r = radius + Math.random() * radius;
+             targetRef.current = new THREE.Vector3(
+               enemyPos.x + Math.cos(angle) * r,
                enemyPos.y,
-               enemyPos.z + Math.sin(angle) * radius
+               enemyPos.z + Math.sin(angle) * r
              );
           }
-          moveDir.subVectors(searchTarget.current, enemyPos).normalize();
+          moveDir.subVectors(targetRef.current, enemyPos).normalize();
+        } else if (state === 'flee') {
+          // Move directly away from player
+          moveDir.subVectors(enemyPos, playerPos).normalize();
+          // Add some randomness to not get stuck in corners as easily
+          moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), (Math.random() - 0.5) * Math.PI / 4);
+        } else if (state === 'berserk') {
+          // Move directly towards player, ignoring flanking
+          moveDir.subVectors(playerPos, enemyPos).normalize();
         }
     }
 
     // Apply movement
     let speed = ENEMY_SPEED;
     if (state === 'search') speed *= 0.5;
+    if (state === 'patrol') speed *= 0.3; // Slower than search
     if (state === 'evade') speed *= 1.2; // Run away faster
+    if (state === 'flee') speed *= 1.5; // Flee very fast
     if (state === 'flank') speed *= 0.9; // Flank slightly slower than direct chase
     if (state === 'wait') speed *= 0.4; // Circle slowly while waiting
+    if (state === 'berserk') speed *= 1.3; // Berserk is faster
 
     const currentVel = rigidBody.current.linvel();
     
@@ -338,7 +437,8 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
         // Face movement direction
         if (moveDir.lengthSq() > 0.1) {
           const angle = Math.atan2(moveDir.x, moveDir.z);
-          rigidBody.current.setRotation({ x: 0, y: angle, z: 0, w: 1 }, true);
+          const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+          rigidBody.current.setRotation(q, true);
         }
     }
 
@@ -353,9 +453,9 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
       const lerpFactor = 1 - Math.exp(-15 * delta);
       
       if (isDodgingEnemy) {
-          // Smooth dodge roll
-          group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, dodgeDir.current * Math.PI * 2, lerpFactor * 0.5);
-          group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0.5, lerpFactor);
+          // Quick sidestep, no spin
+          group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, dodgeDir.current * 0.3, lerpFactor * 0.8);
+          group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0.2, lerpFactor);
       } else if (isBlocking) {
           // Smooth block crouch
           group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, -0.3, lerpFactor);
@@ -366,21 +466,116 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, lerpFactor);
       } else {
           // Normal movement animation
-          group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, Math.sin(clockState.clock.elapsedTime * freq) * 0.1, lerpFactor);
+          if (type === 'lion' && (state === 'chase' || state === 'evade' || state === 'flank' || state === 'flee' || state === 'berserk')) {
+             // Feline bounding run - more aggressive and lower to the ground
+             const runCycle = clockState.clock.elapsedTime * freq * 0.8;
+             group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, Math.abs(Math.sin(runCycle)) * 0.6 - 0.1, lerpFactor);
+             group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, Math.cos(runCycle) * 0.35, lerpFactor);
+             group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, Math.sin(runCycle * 0.5) * 0.1, lerpFactor); // Shoulder roll
+          } else if (type === 'bear' && (state === 'chase' || state === 'evade' || state === 'flank' || state === 'flee' || state === 'berserk')) {
+             // Heavy lumbering walk
+             group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, Math.abs(Math.sin(clockState.clock.elapsedTime * freq * 0.5)) * 0.15, lerpFactor);
+             group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, Math.sin(clockState.clock.elapsedTime * freq * 0.5) * 0.1, lerpFactor); // Side to side sway
+             group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, Math.cos(clockState.clock.elapsedTime * freq * 0.5) * 0.05, lerpFactor);
+          } else if (type === 'wolf' && (state === 'chase' || state === 'evade' || state === 'flank' || state === 'flee' || state === 'berserk')) {
+             // Wolf bounding run - sleek and fast
+             const runCycle = clockState.clock.elapsedTime * freq;
+             group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, Math.abs(Math.sin(runCycle)) * 0.4 - 0.05, lerpFactor);
+             group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, Math.cos(runCycle) * 0.2 + 0.1, lerpFactor); // Leaning forward
+             group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, Math.sin(runCycle * 0.5) * 0.05, lerpFactor);
+          } else {
+             group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, Math.sin(clockState.clock.elapsedTime * freq) * 0.1, lerpFactor);
+          }
           
-          if (state === 'search' && Math.sin(clockState.clock.elapsedTime * 2) > 0.8) {
+          if ((state === 'search' || state === 'patrol') && Math.sin(clockState.clock.elapsedTime * 2) > 0.8) {
              group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.3, lerpFactor); // Sniffing ground
-          } else if (state === 'evade') {
+          } else if ((state === 'evade' || state === 'flee') && type !== 'lion' && type !== 'bear') {
              group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, -0.2, lerpFactor); // Leaning back while running
           } else if (state === 'flank') {
              group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, flankAngle.current * 0.2, lerpFactor); // Leaning into the flank
           } else if (state === 'wait') {
              group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.1, lerpFactor); // Slightly hunched
-          } else {
+          } else if (state === 'berserk') {
+             group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.2, lerpFactor); // Leaning forward aggressively
+          } else if (type !== 'lion' && type !== 'bear') {
              group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0, lerpFactor);
              group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, lerpFactor);
           }
       }
+      
+      // Leg Animation
+      if (legFLRef.current && legFRRef.current && legBLRef.current && legBRRef.current) {
+          const isMoving = state === 'chase' || state === 'evade' || state === 'flank' || state === 'search' || state === 'patrol' || state === 'flee' || state === 'berserk';
+          const speedMultiplier = (state === 'search' || state === 'patrol') ? 0.5 : (state === 'chase' || state === 'berserk' || state === 'flee') ? 1.5 : 1;
+          const swingFreq = freq * speedMultiplier;
+          const swingAmp = isMoving ? 0.6 : 0;
+          
+          if (type === 'lion' && (state === 'chase' || state === 'evade' || state === 'flee' || state === 'berserk')) {
+              // Bounding run for lion
+              const runCycle = clockState.clock.elapsedTime * swingFreq * 0.8;
+              legFLRef.current.rotation.x = Math.sin(runCycle) * swingAmp;
+              legFRRef.current.rotation.x = Math.sin(runCycle + 0.5) * swingAmp; // Slight offset
+              legBLRef.current.rotation.x = -Math.sin(runCycle) * swingAmp;
+              legBRRef.current.rotation.x = -Math.sin(runCycle + 0.5) * swingAmp;
+          } else {
+              // Alternating trot/walk
+              const runCycle = clockState.clock.elapsedTime * swingFreq;
+              legFLRef.current.rotation.x = Math.sin(runCycle) * swingAmp;
+              legFRRef.current.rotation.x = Math.sin(runCycle + Math.PI) * swingAmp;
+              legBLRef.current.rotation.x = Math.sin(runCycle + Math.PI) * swingAmp;
+              legBRRef.current.rotation.x = Math.sin(runCycle) * swingAmp;
+          }
+      }
+
+      // Breathing and Head Bobbing
+      if (bodyRef.current && headRef.current) {
+          if (state === 'wait' || state === 'search' || state === 'patrol') {
+              // Breathing
+              const breath = Math.sin(clockState.clock.elapsedTime * 2) * 0.05;
+              bodyRef.current.scale.set(1 + breath, 1, 1 + breath);
+              
+              // Head looking around
+              if (state === 'wait' || state === 'patrol') {
+                  headRef.current.rotation.y = Math.sin(clockState.clock.elapsedTime * 1.5) * 0.4;
+                  headRef.current.rotation.x = Math.sin(clockState.clock.elapsedTime * 1) * 0.1;
+              }
+          } else {
+              bodyRef.current.scale.set(1, 1, 1);
+              headRef.current.rotation.y = 0;
+              // Head bobbing while running
+              if (type === 'lion' && (state === 'chase' || state === 'berserk')) {
+                  headRef.current.rotation.x = Math.sin(clockState.clock.elapsedTime * freq * 0.8) * 0.2;
+              } else {
+                  headRef.current.rotation.x = 0;
+              }
+          }
+      }
+    }
+
+    if (tailRef.current) {
+        if (type === 'lion') {
+            const tailSpeed = (state === 'chase' || state === 'evade') ? 15 : 5;
+            // More dynamic tail movement for lion, curving upwards
+            tailRef.current.rotation.y = Math.sin(clockState.clock.elapsedTime * tailSpeed) * 0.5;
+            tailRef.current.rotation.x = 0.5 + Math.cos(clockState.clock.elapsedTime * tailSpeed * 0.5) * 0.3; // Curved up
+            tailRef.current.rotation.z = Math.sin(clockState.clock.elapsedTime * tailSpeed * 0.8) * 0.2;
+        } else if (type === 'wolf') {
+            const tailSpeed = (state === 'chase' || state === 'evade' || state === 'flee') ? 20 : 8;
+            // Wolf tail straight out when running, down when walking
+            const baseRotX = (state === 'chase' || state === 'evade' || state === 'flee') ? 0.2 : -0.4;
+            tailRef.current.rotation.y = Math.sin(clockState.clock.elapsedTime * tailSpeed) * 0.3;
+            tailRef.current.rotation.x = THREE.MathUtils.lerp(tailRef.current.rotation.x, baseRotX + Math.cos(clockState.clock.elapsedTime * tailSpeed * 0.5) * 0.1, 5 * delta);
+        }
+    }
+
+    if (jawRef.current && type === 'lion') {
+        if (isAttacking.current) {
+            jawRef.current.rotation.x = THREE.MathUtils.lerp(jawRef.current.rotation.x, 0.6, 10 * delta);
+        } else if (state === 'chase') {
+            jawRef.current.rotation.x = 0.1 + Math.abs(Math.sin(clockState.clock.elapsedTime * 10)) * 0.2;
+        } else {
+            jawRef.current.rotation.x = THREE.MathUtils.lerp(jawRef.current.rotation.x, 0.1, 5 * delta);
+        }
     }
 
     if (isTarget && targetIndicatorRef.current) {
@@ -391,7 +586,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   });
 
   const handleHit = (impactPos?: THREE.Vector3) => {
-    if (isDead) return;
+    if (isDeadRef.current) return;
 
     // Reduce damage if blocking
     const damage = isBlocking ? 5 : 15;
@@ -416,6 +611,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
     }
 
     if (newHealth <= 0) {
+      isDeadRef.current = true;
       setIsDead(true);
       addScore(50);
       incrementKills();
@@ -423,6 +619,9 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
       if (rigidBody.current) {
         const pos = rigidBody.current.translation();
         addEffect([pos.x, pos.y, pos.z], 'smoke');
+        addEffect([pos.x, pos.y + 1, pos.z], 'smoke');
+        addEffect([pos.x, pos.y + 0.5, pos.z], 'blood');
+        addEffect([pos.x, pos.y + 0.5, pos.z], 'flash');
 
         // Death knockback
         rigidBody.current.setLinvel({ 
@@ -510,178 +709,229 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
         {/* Enemy Body - High Res & Menacing */}
         <group position={[0, 0.4, 0]}>
            {/* Main Body - Muscular */}
-          <mesh castShadow position={[0, 0.1, 0.1]} rotation={[Math.PI / 2, 0, 0]}>
-            <capsuleGeometry args={type === 'bear' ? [0.45, 1.0, 16, 32] : type === 'lion' ? [0.35, 1.1, 16, 32] : [0.35, 0.9, 8, 16]} />
+          <mesh ref={bodyRef} castShadow position={[0, 0.1, 0.1]} rotation={[Math.PI / 2, 0, 0]}>
+            <capsuleGeometry args={type === 'bear' ? [0.6, 1.2, 16, 32] : type === 'lion' ? [0.35, 1.1, 16, 32] : [0.32, 1.0, 12, 16]} />
             <meshPhysicalMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.9} />
           </mesh>
           
           {/* Fur/Mane - Spiky and dark */}
           {type === 'lion' ? (
             <group position={[0, 0.4, 0.4]} rotation={[-0.2, 0, 0]}>
-               {/* Main Mane */}
-               <mesh>
-                 <torusGeometry args={[0.38, 0.25, 16, 32]} />
-                 <meshPhysicalMaterial color={MANE_COLOR} roughness={1} />
+               {/* Main Mane - Fluffy/Majestic */}
+               <mesh scale={[1.3, 1.3, 1.2]}>
+                 <dodecahedronGeometry args={[0.5, 1]} />
+                 <meshPhysicalMaterial color={MANE_COLOR} roughness={1} flatShading />
                </mesh>
-               {/* Secondary Mane layer for volume */}
-               <mesh position={[0, 0, -0.15]} scale={1.1}>
-                 <torusGeometry args={[0.35, 0.2, 16, 32]} />
-                 <meshPhysicalMaterial color={MANE_COLOR} roughness={1} />
+               <mesh position={[0, 0, -0.3]} scale={[1.4, 1.4, 1.1]}>
+                 <dodecahedronGeometry args={[0.5, 1]} />
+                 <meshPhysicalMaterial color={MANE_COLOR} roughness={1} flatShading />
+               </mesh>
+               <mesh position={[0, -0.3, 0.1]} scale={[1.2, 1.2, 1.2]}>
+                 <dodecahedronGeometry args={[0.45, 1]} />
+                 <meshPhysicalMaterial color={MANE_COLOR} roughness={1} flatShading />
                </mesh>
                {/* Spiky bits of mane */}
-               {[...Array(8)].map((_, i) => (
-                 <mesh key={i} position={[Math.cos(i * Math.PI / 4) * 0.4, Math.sin(i * Math.PI / 4) * 0.4, 0]} rotation={[0, 0, i * Math.PI / 4]}>
-                   <coneGeometry args={[0.1, 0.3, 4]} />
-                   <meshPhysicalMaterial color={MANE_COLOR} roughness={1} />
+               {[...Array(16)].map((_, i) => (
+                 <mesh key={i} position={[Math.cos(i * Math.PI / 8) * 0.55, Math.sin(i * Math.PI / 8) * 0.55, (Math.random() - 0.5) * 0.4]} rotation={[0, 0, i * Math.PI / 8]}>
+                   <coneGeometry args={[0.18, 0.5, 4]} />
+                   <meshPhysicalMaterial color={MANE_COLOR} roughness={1} flatShading />
                  </mesh>
                ))}
             </group>
           ) : type === 'bear' ? (
             <>
-              {/* Bear Ears */}
-              <mesh position={[0.25, 0.6, 0.5]}>
-                <sphereGeometry args={[0.12, 16, 16]} />
+              {/* Bear Ears - Small and rounded */}
+              <mesh position={[0.35, 0.7, 0.5]}>
+                <sphereGeometry args={[0.1, 16, 16]} />
                 <meshPhysicalMaterial color={BODY_COLOR} roughness={0.9} />
               </mesh>
-              <mesh position={[-0.25, 0.6, 0.5]}>
-                <sphereGeometry args={[0.12, 16, 16]} />
+              <mesh position={[-0.35, 0.7, 0.5]}>
+                <sphereGeometry args={[0.1, 16, 16]} />
                 <meshPhysicalMaterial color={BODY_COLOR} roughness={0.9} />
               </mesh>
-              {/* Hump */}
-              <mesh position={[0, 0.55, 0.1]}>
-                <sphereGeometry args={[0.3, 16, 16]} />
+              {/* Massive Hump (Grizzly style) */}
+              <mesh position={[0, 0.75, 0.1]}>
+                <sphereGeometry args={[0.45, 16, 16]} />
                 <meshPhysicalMaterial color={BODY_COLOR} roughness={0.9} />
               </mesh>
-              {/* Thicker Neck */}
-              <mesh position={[0, 0.3, 0.4]} rotation={[Math.PI / 4, 0, 0]}>
-                <cylinderGeometry args={[0.35, 0.4, 0.5, 16]} />
+              {/* Thicker Neck/Shoulders */}
+              <mesh position={[0, 0.4, 0.5]} rotation={[Math.PI / 4, 0, 0]}>
+                <cylinderGeometry args={[0.5, 0.6, 0.6, 16]} />
+                <meshPhysicalMaterial color={BODY_COLOR} roughness={0.9} />
+              </mesh>
+              {/* Belly */}
+              <mesh position={[0, -0.1, 0.1]}>
+                <sphereGeometry args={[0.55, 16, 16]} />
                 <meshPhysicalMaterial color={BODY_COLOR} roughness={0.9} />
               </mesh>
             </>
           ) : (
-            <>
-              <mesh position={[0, 0.45, -0.3]} rotation={[-0.5, 0, 0]}>
-                 <coneGeometry args={[0.15, 0.5, 8]} />
-                 <meshPhysicalMaterial color={MANE_COLOR} />
-              </mesh>
-              <mesh position={[0, 0.45, 0]} rotation={[-0.3, 0, 0]}>
-                 <coneGeometry args={[0.15, 0.5, 8]} />
-                 <meshPhysicalMaterial color={MANE_COLOR} />
-              </mesh>
-              <mesh position={[0, 0.45, 0.3]} rotation={[-0.1, 0, 0]}>
-                 <coneGeometry args={[0.15, 0.5, 8]} />
-                 <meshPhysicalMaterial color={MANE_COLOR} />
-              </mesh>
-            </>
+            // Wolf Ruff
+            <group position={[0, 0.35, 0.4]} rotation={[-0.2, 0, 0]}>
+               <mesh scale={[1.1, 1.1, 1.1]}>
+                 <dodecahedronGeometry args={[0.35, 1]} />
+                 <meshPhysicalMaterial color={MANE_COLOR} roughness={1} flatShading />
+               </mesh>
+               {/* Spiky bits of ruff */}
+               {[...Array(8)].map((_, i) => (
+                 <mesh key={i} position={[Math.cos(i * Math.PI / 4) * 0.35, Math.sin(i * Math.PI / 4) * 0.35, (Math.random() - 0.5) * 0.2]} rotation={[0, 0, i * Math.PI / 4]}>
+                   <coneGeometry args={[0.1, 0.3, 4]} />
+                   <meshPhysicalMaterial color={MANE_COLOR} roughness={1} flatShading />
+                 </mesh>
+               ))}
+            </group>
           )}
 
           {/* Head - More detailed */}
-          <group position={[0, 0.4, 0.7]}>
+          <group ref={headRef} position={[0, 0.4, 0.7]}>
             <mesh castShadow>
-              <boxGeometry args={type === 'bear' ? [0.55, 0.5, 0.6] : type === 'lion' ? [0.45, 0.55, 0.65] : [0.45, 0.5, 0.6]} />
+              <boxGeometry args={type === 'bear' ? [0.65, 0.55, 0.7] : type === 'lion' ? [0.5, 0.6, 0.7] : [0.4, 0.45, 0.6]} />
               <meshPhysicalMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.9} />
             </mesh>
             
-            {/* Glowing Eyes - Angled */}
-            <mesh position={[0.18, 0.1, 0.25]} rotation={[0, -0.2, 0]}>
+            {/* Glowing Eyes - Angled/Angry */}
+            <mesh position={[0.18, 0.1, 0.25]} rotation={[0, -0.2, type === 'lion' ? 0.3 : 0]}>
               <sphereGeometry args={[0.08, 16, 16]} />
               <meshPhysicalMaterial color={EYE_COLOR} emissive={EYE_COLOR} emissiveIntensity={4} />
             </mesh>
-            <mesh position={[-0.18, 0.1, 0.25]} rotation={[0, 0.2, 0]}>
+            <mesh position={[-0.18, 0.1, 0.25]} rotation={[0, 0.2, type === 'lion' ? -0.3 : 0]}>
               <sphereGeometry args={[0.08, 16, 16]} />
               <meshPhysicalMaterial color={EYE_COLOR} emissive={EYE_COLOR} emissiveIntensity={4} />
             </mesh>
             
-            {/* Brow Ridge */}
+            {/* Brow Ridge - More pronounced for angry look */}
              <mesh position={[0, 0.25, 0.28]} rotation={[0.2, 0, 0]}>
-               <boxGeometry args={type === 'bear' ? [0.6, 0.15, 0.2] : [0.5, 0.1, 0.2]} />
+               <boxGeometry args={type === 'bear' ? [0.7, 0.15, 0.2] : type === 'lion' ? [0.6, 0.2, 0.3] : [0.5, 0.1, 0.2]} />
                <meshPhysicalMaterial color={MANE_COLOR} roughness={0.9} />
              </mesh>
 
             {/* Snout & Teeth - Longer and sharper */}
-            <mesh castShadow position={[0, -0.1, 0.5]}>
-              <boxGeometry args={type === 'bear' ? [0.35, 0.3, 0.5] : type === 'lion' ? [0.3, 0.25, 0.6] : [0.28, 0.25, 0.5]} />
-              <meshPhysicalMaterial color={type === 'bear' ? BODY_COLOR : MANE_COLOR} roughness={0.9} />
+            <mesh castShadow position={[0, -0.1, type === 'wolf' ? 0.45 : 0.5]}>
+              <boxGeometry args={type === 'bear' ? [0.4, 0.35, 0.4] : type === 'lion' ? [0.35, 0.3, 0.65] : [0.22, 0.2, 0.5]} />
+              <meshPhysicalMaterial color={type === 'bear' ? BODY_COLOR : type === 'lion' ? BODY_COLOR : BODY_COLOR} roughness={0.9} />
             </mesh>
+            
+            {/* Lower Jaw (for open mouth effect) */}
+            {type === 'lion' && (
+              <group ref={jawRef} rotation={[0.1, 0, 0]} position={[0, -0.25, 0.45]}>
+                <mesh castShadow>
+                  <boxGeometry args={[0.3, 0.15, 0.6]} />
+                  <meshPhysicalMaterial color={BODY_COLOR} roughness={0.9} />
+                </mesh>
+                {/* Tongue */}
+                <mesh position={[0, 0.08, 0.1]} rotation={[-0.1, 0, 0]}>
+                  <boxGeometry args={[0.15, 0.05, 0.4]} />
+                  <meshPhysicalMaterial color={TONGUE_COLOR} roughness={0.5} />
+                </mesh>
+                {/* Lower Fangs */}
+                <mesh position={[0.1, 0.1, 0.25]} rotation={[0, 0, 0]}>
+                   <coneGeometry args={[0.04, 0.15, 8]} />
+                   <meshPhysicalMaterial color="#ffffee" roughness={0.2} />
+                </mesh>
+                <mesh position={[-0.1, 0.1, 0.25]} rotation={[0, 0, 0]}>
+                   <coneGeometry args={[0.04, 0.15, 8]} />
+                   <meshPhysicalMaterial color="#ffffee" roughness={0.2} />
+                </mesh>
+              </group>
+            )}
             
             {/* Nose */}
-            <mesh position={[0, 0.05, type === 'lion' ? 0.8 : 0.75]}>
-              <sphereGeometry args={[0.06, 8, 8]} />
-              <meshPhysicalMaterial color="#111" roughness={0.5} />
+            <mesh position={[0, 0.05, type === 'lion' ? 0.85 : type === 'bear' ? 0.7 : 0.7]}>
+              <sphereGeometry args={[type === 'lion' ? 0.1 : 0.06, 8, 8]} />
+              <meshPhysicalMaterial color={type === 'lion' ? NOSE_COLOR : "#111"} roughness={0.5} />
             </mesh>
             
-            {/* Fangs */}
+            {/* Upper Fangs */}
             <mesh position={[0.1, -0.25, 0.6]} rotation={[Math.PI, 0, 0]}>
-               <coneGeometry args={type === 'bear' ? [0.05, 0.15, 8] : type === 'lion' ? [0.04, 0.2, 8] : [0.04, 0.15, 8]} />
+               <coneGeometry args={type === 'bear' ? [0.05, 0.15, 8] : type === 'lion' ? [0.05, 0.25, 8] : [0.04, 0.15, 8]} />
                <meshPhysicalMaterial color="#ffffee" roughness={0.2} />
             </mesh>
             <mesh position={[-0.1, -0.25, 0.6]} rotation={[Math.PI, 0, 0]}>
-               <coneGeometry args={type === 'bear' ? [0.05, 0.15, 8] : type === 'lion' ? [0.04, 0.2, 8] : [0.04, 0.15, 8]} />
+               <coneGeometry args={type === 'bear' ? [0.05, 0.15, 8] : type === 'lion' ? [0.05, 0.25, 8] : [0.04, 0.15, 8]} />
                <meshPhysicalMaterial color="#ffffee" roughness={0.2} />
             </mesh>
 
             {/* Ears */}
             {type === 'wolf' && (
               <>
-                <mesh position={[0.2, 0.35, -0.1]} rotation={[-0.2, 0, 0.2]}>
-                  <coneGeometry args={[0.1, 0.35, 8]} />
-                  <meshPhysicalMaterial color={BODY_COLOR} />
+                <mesh position={[0.18, 0.35, -0.15]} rotation={[-0.2, 0, 0.3]}>
+                  <coneGeometry args={[0.08, 0.35, 8]} />
+                  <meshPhysicalMaterial color={MANE_COLOR} />
                 </mesh>
-                <mesh position={[-0.2, 0.35, -0.1]} rotation={[-0.2, 0, -0.2]}>
-                  <coneGeometry args={[0.1, 0.35, 8]} />
-                  <meshPhysicalMaterial color={BODY_COLOR} />
+                <mesh position={[-0.18, 0.35, -0.15]} rotation={[-0.2, 0, -0.3]}>
+                  <coneGeometry args={[0.08, 0.35, 8]} />
+                  <meshPhysicalMaterial color={MANE_COLOR} />
                 </mesh>
               </>
             )}
             {type === 'lion' && (
               <>
-                <mesh position={[0.25, 0.25, -0.1]} rotation={[-0.2, 0, 0.2]}>
-                  <sphereGeometry args={[0.1, 8, 8]} />
+                <mesh position={[0.28, 0.3, -0.1]} rotation={[-0.2, 0, 0.2]}>
+                  <sphereGeometry args={[0.12, 8, 8]} />
                   <meshPhysicalMaterial color={BODY_COLOR} />
                 </mesh>
-                <mesh position={[-0.25, 0.25, -0.1]} rotation={[-0.2, 0, -0.2]}>
-                  <sphereGeometry args={[0.1, 8, 8]} />
+                <mesh position={[-0.28, 0.3, -0.1]} rotation={[-0.2, 0, -0.2]}>
+                  <sphereGeometry args={[0.12, 8, 8]} />
                   <meshPhysicalMaterial color={BODY_COLOR} />
                 </mesh>
               </>
             )}
           </group>
 
-          {/* Legs - Thicker */}
+          {/* Legs - Thicker and Animated */}
           <group>
-              <mesh position={[0.25, -0.4, 0.4]} rotation={[0.2, 0, 0]}>
-                 <cylinderGeometry args={[0.08, 0.06, 0.7, 8]} />
-                 <meshPhysicalMaterial color={BODY_COLOR} />
-              </mesh>
-              <mesh position={[-0.25, -0.4, 0.4]} rotation={[0.2, 0, 0]}>
-                 <cylinderGeometry args={[0.08, 0.06, 0.7, 8]} />
-                 <meshPhysicalMaterial color={BODY_COLOR} />
-              </mesh>
-              <mesh position={[0.25, -0.4, -0.4]} rotation={[-0.2, 0, 0]}>
-                 <cylinderGeometry args={[0.08, 0.06, 0.7, 8]} />
-                 <meshPhysicalMaterial color={BODY_COLOR} />
-              </mesh>
-              <mesh position={[-0.25, -0.4, -0.4]} rotation={[-0.2, 0, 0]}>
-                 <cylinderGeometry args={[0.08, 0.06, 0.7, 8]} />
-                 <meshPhysicalMaterial color={BODY_COLOR} />
-              </mesh>
+              <group ref={legFLRef} position={[type === 'bear' ? 0.35 : type === 'lion' ? 0.3 : 0.25, 0, 0.4]}>
+                <mesh position={[0, -0.4, 0]} rotation={[0.2, 0, 0]}>
+                   <cylinderGeometry args={type === 'bear' ? [0.15, 0.12, 0.8, 8] : type === 'lion' ? [0.12, 0.08, 0.8, 8] : [0.08, 0.06, 0.7, 8]} />
+                   <meshPhysicalMaterial color={type === 'bear' ? MANE_COLOR : BODY_COLOR} />
+                </mesh>
+              </group>
+              <group ref={legFRRef} position={[type === 'bear' ? -0.35 : type === 'lion' ? -0.3 : -0.25, 0, 0.4]}>
+                <mesh position={[0, -0.4, 0]} rotation={[0.2, 0, 0]}>
+                   <cylinderGeometry args={type === 'bear' ? [0.15, 0.12, 0.8, 8] : type === 'lion' ? [0.12, 0.08, 0.8, 8] : [0.08, 0.06, 0.7, 8]} />
+                   <meshPhysicalMaterial color={type === 'bear' ? MANE_COLOR : BODY_COLOR} />
+                </mesh>
+              </group>
+              <group ref={legBLRef} position={[type === 'bear' ? 0.35 : type === 'lion' ? 0.3 : 0.25, 0, -0.4]}>
+                <mesh position={[0, -0.4, 0]} rotation={[-0.2, 0, 0]}>
+                   <cylinderGeometry args={type === 'bear' ? [0.15, 0.12, 0.8, 8] : type === 'lion' ? [0.12, 0.08, 0.8, 8] : [0.08, 0.06, 0.7, 8]} />
+                   <meshPhysicalMaterial color={type === 'bear' ? MANE_COLOR : BODY_COLOR} />
+                </mesh>
+              </group>
+              <group ref={legBRRef} position={[type === 'bear' ? -0.35 : type === 'lion' ? -0.3 : -0.25, 0, -0.4]}>
+                <mesh position={[0, -0.4, 0]} rotation={[-0.2, 0, 0]}>
+                   <cylinderGeometry args={type === 'bear' ? [0.15, 0.12, 0.8, 8] : type === 'lion' ? [0.12, 0.08, 0.8, 8] : [0.08, 0.06, 0.7, 8]} />
+                   <meshPhysicalMaterial color={type === 'bear' ? MANE_COLOR : BODY_COLOR} />
+                </mesh>
+              </group>
           </group>
           
           {/* Tail - Bushy */}
           {type === 'wolf' && (
-            <mesh position={[0, 0.2, -0.6]} rotation={[-0.4, 0, 0]}>
-               <cylinderGeometry args={[0.1, 0.02, 0.8, 8]} />
-               <meshPhysicalMaterial color={BODY_COLOR} />
-            </mesh>
+            <group ref={tailRef} position={[0, 0.2, -0.6]} rotation={[-0.4, 0, 0]}>
+               <mesh position={[0, -0.3, 0]}>
+                 <capsuleGeometry args={[0.12, 0.5, 8, 8]} />
+                 <meshPhysicalMaterial color={BODY_COLOR} roughness={0.8} />
+               </mesh>
+               <mesh position={[0, -0.6, 0]}>
+                 <coneGeometry args={[0.12, 0.3, 8]} />
+                 <meshPhysicalMaterial color={MANE_COLOR} roughness={0.8} />
+               </mesh>
+            </group>
           )}
           {type === 'lion' && (
-            <group position={[0, 0.2, -0.6]} rotation={[-0.4, 0, 0]}>
-               <mesh>
-                 <cylinderGeometry args={[0.03, 0.03, 0.8, 8]} />
+            <group ref={tailRef} position={[0, 0.3, -0.5]} rotation={[0.5, 0, 0]}>
+               <mesh position={[0, -0.4, 0]}>
+                 <cylinderGeometry args={[0.04, 0.02, 0.9, 8]} />
                  <meshPhysicalMaterial color={BODY_COLOR} />
                </mesh>
-               <mesh position={[0, -0.4, 0]}>
-                 <sphereGeometry args={[0.08, 8, 8]} />
+               {/* Tail Tuft */}
+               <mesh position={[0, -0.9, 0]}>
+                 <sphereGeometry args={[0.15, 8, 8]} />
+                 <meshPhysicalMaterial color={MANE_COLOR} />
+               </mesh>
+               <mesh position={[0, -1.0, 0]}>
+                 <coneGeometry args={[0.15, 0.2, 8]} />
                  <meshPhysicalMaterial color={MANE_COLOR} />
                </mesh>
             </group>

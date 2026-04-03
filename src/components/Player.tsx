@@ -319,7 +319,8 @@ export function Player() {
             
             if (dot > 0.8) {
                damageEnemy(enemy.id, 15);
-               addEffect([enemyVec.x, enemyVec.y, enemyVec.z], 'blood');
+               addEffect([enemyVec.x, enemyVec.y + 1, enemyVec.z], 'blood');
+               addEffect([enemyVec.x, enemyVec.y + 1, enemyVec.z], 'impact');
             }
           }
         });
@@ -385,7 +386,13 @@ export function Player() {
   });
 
   useFrame((state, delta) => {
+    const { isTransitioningPhase } = useStore.getState();
     if (!playerRef.current || isPaused || health <= 0) return;
+
+    if (isTransitioningPhase) {
+        playerRef.current.setLinvel({ x: 0, y: playerRef.current.linvel().y, z: 0 }, true);
+        return;
+    }
 
     // Weapon scale animation
     if (slingRef.current) {

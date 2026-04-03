@@ -29,11 +29,12 @@ function Spawner() {
       totalSpawnedInPhase: 0,
       nextWaveTime: 0,
       spawning: false,
-      currentPhase: 1
+      currentPhase: 1,
+      isTransitioning: false
   });
 
   useFrame(({ clock }) => {
-    if (isPaused || isTransitioningPhase || health <= 0) return;
+    if (isPaused || health <= 0) return;
     
     const state = stateRef.current;
     
@@ -43,7 +44,10 @@ function Spawner() {
       state.totalSpawnedInPhase = 0;
       state.nextWaveTime = 0;
       state.spawning = false;
+      state.isTransitioning = false;
     }
+
+    if (state.isTransitioning || isTransitioningPhase) return;
 
     let targetKills = 0;
     let maxAtOnce = 0;
@@ -71,7 +75,8 @@ function Spawner() {
     }
 
     // Check for phase completion
-    if (enemiesKilledInPhase >= targetKills && !isTransitioningPhase) {
+    if (enemiesKilledInPhase >= targetKills) {
+      state.isTransitioning = true;
       if (phase === 1) {
         setPhaseMessage("Parabéns, você venceu os lobos! Prepare-se para enfrentar o Urso.");
         setTimeout(() => nextPhase(), 5000);
@@ -79,11 +84,11 @@ function Spawner() {
         setPhaseMessage("Parabéns, você venceu os ursos! Prepare-se para enfrentar o poderoso Leão.");
         setTimeout(() => nextPhase(), 5000);
       } else if (phase === 3) {
-        setPhaseMessage("Parabéns! Você venceu o Leão e provou seu valor!");
+        setPhaseMessage("VITÓRIA! O LEÃO FOI DERROTADO!");
         setTimeout(() => {
-          useStore.getState().reset();
-          window.location.reload();
-        }, 8000);
+          useStore.getState().setStoryScreen(9);
+          useStore.getState().setPhaseMessage(null);
+        }, 3000);
       }
       return;
     }
@@ -124,7 +129,7 @@ function Spawner() {
 }
 
 function UI() {
-  const { health, score, isPaused, reset, togglePause, enemies, phase, phaseMessage } = useStore();
+  const { health, score, isPaused, reset, togglePause, enemies, phase, phaseMessage, isWalkingHome } = useStore();
 
   useEffect(() => {
     if (health <= 0) {
@@ -254,7 +259,7 @@ function UI() {
       </div>
 
       {/* Phase Transition Message */}
-      {phaseMessage && (
+      {phaseMessage && !isWalkingHome && (
         <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/50 backdrop-blur-sm">
           <div className="text-center p-8 bg-black/80 border-2 border-yellow-500 rounded-xl shadow-[0_0_30px_rgba(234,179,8,0.5)] animate-bounce">
             <h2 className="text-4xl md:text-5xl text-yellow-400 font-bold mb-4" style={{ fontFamily: "'Cinzel', serif" }}>
@@ -284,26 +289,17 @@ function UI() {
 
       {/* Bottom Right: Actions (Jump, Weapons) */}
       <div className="absolute bottom-8 right-8 flex gap-4 pointer-events-auto">
-        {/* Column 0: Block */}
+        {/* Column 1: Block above Stone */}
         <div className="flex flex-col gap-4 items-center justify-end">
+             {/* Block Button */}
             <button 
                 className="w-16 h-16 bg-green-900/60 border-2 border-green-500 rounded-full active:bg-green-700/80 backdrop-blur-md flex items-center justify-center text-white font-bold text-[10px] hover:bg-green-800/60 transition-all shadow-lg shadow-green-900/30"
                 onPointerDown={() => window.dispatchEvent(new Event('blockStart'))}
                 onPointerUp={() => window.dispatchEvent(new Event('blockEnd'))}
                 onPointerLeave={() => window.dispatchEvent(new Event('blockEnd'))}
+                onPointerCancel={() => window.dispatchEvent(new Event('blockEnd'))}
             >
                 DEFESA
-            </button>
-        </div>
-
-        {/* Column 1: Dodge above Stone */}
-        <div className="flex flex-col gap-4 items-center justify-end">
-             {/* Dash Button */}
-            <button 
-                className="w-16 h-16 bg-blue-900/60 border-2 border-blue-500 rounded-full active:bg-blue-700/80 backdrop-blur-md flex items-center justify-center text-white font-bold text-[10px] hover:bg-blue-800/60 transition-all shadow-lg shadow-blue-900/30"
-                onPointerDown={() => window.dispatchEvent(new Event('dash'))}
-            >
-                ESQUIVA
             </button>
             
             {/* Stone Weapon */}
@@ -324,6 +320,7 @@ function UI() {
                 onPointerDown={() => sendKey('Space', true)}
                 onPointerUp={() => sendKey('Space', false)}
                 onPointerLeave={() => sendKey('Space', false)}
+                onPointerCancel={() => sendKey('Space', false)}
             >
                 PULAR
             </button>
@@ -345,7 +342,6 @@ function UI() {
         <p>Arraste a tela para Mirar</p>
         <p>Arraste os botões de arma para Mirar e Atirar</p>
         <p>ESPAÇO / Botão para Pular</p>
-        <p>SHIFT / Botão para Esquiva</p>
         <p>E / Botão para Defesa</p>
         <p>CLIQUE ESQUERDO para Faca</p>
         <p>CLIQUE DIREITO para Funda</p>
@@ -393,6 +389,12 @@ function AmbientSound() {
     };
   }, [audio, isPaused, health]);
 
+  useEffect(() => {
+    return () => {
+        audio.pause();
+    };
+  }, [audio]);
+
   return null;
 }
 
@@ -408,6 +410,12 @@ function CombatMusic() {
     a.volume = 0;
     return a;
   });
+
+  useEffect(() => {
+    return () => {
+        audio.pause();
+    };
+  }, [audio]);
 
   useEffect(() => {
     if (isPaused || health <= 0) {

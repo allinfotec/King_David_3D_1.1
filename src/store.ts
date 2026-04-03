@@ -33,6 +33,7 @@ interface GameState {
   enemiesKilledInPhase: number;
   phaseMessage: string | null;
   isTransitioningPhase: boolean;
+  isWalkingHome: boolean;
   storyScreen: number;
   stones: Stone[];
   enemies: Enemy[];
@@ -58,6 +59,9 @@ interface GameState {
   nextPhase: () => void;
   incrementKills: () => void;
   setStoryScreen: (screen: number) => void;
+  startWalkingHome: () => void;
+  setWalkingHome: (walking: boolean) => void;
+  finishGame: () => void;
 }
 
 export const useStore = create<GameState>((set) => ({
@@ -71,6 +75,7 @@ export const useStore = create<GameState>((set) => ({
   enemiesKilledInPhase: 0,
   phaseMessage: null,
   isTransitioningPhase: false,
+  isWalkingHome: false,
   storyScreen: 1,
   stones: [],
   enemies: [],
@@ -85,9 +90,9 @@ export const useStore = create<GameState>((set) => ({
   setDodging: (dodging) => set({ isDodging: dodging }),
   setBlocking: (blocking) => set({ isBlocking: blocking }),
   setTargetId: (id) => set({ targetId: id }),
-  startGame: () => set({ isStarted: true, health: 100, score: 0, isPaused: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, storyScreen: 0, stones: [], enemies: [], effects: [], targetId: null }),
+  startGame: () => set({ isStarted: true, health: 100, score: 0, isPaused: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, storyScreen: 0, stones: [], enemies: [], effects: [], targetId: null }),
   resumeGame: () => set({ isStarted: true, isPaused: false, storyScreen: 0, stones: [], enemies: [], effects: [] }),
-  reset: () => set({ health: 100, score: 0, isPaused: false, isDodging: false, isBlocking: false, isStarted: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, storyScreen: 1, stones: [], enemies: [], effects: [], targetId: null }),
+  reset: () => set({ health: 100, score: 0, isPaused: false, isDodging: false, isBlocking: false, isStarted: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, storyScreen: 1, stones: [], enemies: [], effects: [], targetId: null }),
   shootStone: (position, velocity) => set((state) => ({
     stones: [...state.stones, { id: nanoid(), position, velocity }]
   })),
@@ -120,9 +125,15 @@ export const useStore = create<GameState>((set) => ({
       phaseMessage: null, 
       isTransitioningPhase: false,
       storyScreen: nextStoryScreen,
-      isStarted: nextStoryScreen === 0 // Pause game if going to story screen
+      isStarted: nextStoryScreen === 0, // Pause game if going to story screen
+      enemies: [], // Clear remaining enemies
+      stones: [], // Clear remaining stones
+      effects: [] // Clear remaining effects
     };
   }),
   incrementKills: () => set((state) => ({ enemiesKilledInPhase: state.enemiesKilledInPhase + 1 })),
   setStoryScreen: (screen) => set({ storyScreen: screen }),
+  startWalkingHome: () => set({ isWalkingHome: true, storyScreen: 0, isPaused: false, phaseMessage: null, isStarted: true }),
+  setWalkingHome: (walking) => set({ isWalkingHome: walking }),
+  finishGame: () => set({ storyScreen: 10, isStarted: false, isWalkingHome: false }),
 }));

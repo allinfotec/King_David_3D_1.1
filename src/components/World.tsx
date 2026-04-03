@@ -4,6 +4,58 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMemo, useRef, useEffect } from 'react';
 import { useStore } from '../store';
+import { playerRef } from './Player';
+
+function Passage() {
+  const isWalkingHome = useStore((state) => state.isWalkingHome);
+  const finishGame = useStore((state) => state.finishGame);
+  const arrowRef = useRef<THREE.Group>(null);
+
+  useFrame((state) => {
+    if (!isWalkingHome) return;
+
+    // Animate arrow
+    if (arrowRef.current) {
+      arrowRef.current.position.y = 10 + Math.sin(state.clock.elapsedTime * 4) * 1;
+    }
+
+    // Check player position
+    if (playerRef.current) {
+      const pos = playerRef.current.translation();
+      // If player is close to the passage
+      if (pos.z < -85 && pos.x > -15 && pos.x < 15) {
+        finishGame();
+        document.exitPointerLock();
+      }
+    }
+  });
+
+  if (!isWalkingHome) return null;
+
+  return (
+    <group position={[0, -2, -90]}>
+      {/* Passage Rocks */}
+      <Rock position={[-15, 0, 0]} scale={5} />
+      <Rock position={[15, 0, 0]} scale={5} />
+      <Rock position={[-25, 0, 5]} scale={4} />
+      <Rock position={[25, 0, 5]} scale={4} />
+      
+      {/* Glowing Path */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.1, 10]}>
+        <planeGeometry args={[20, 40]} />
+        <meshBasicMaterial color="#ffffaa" transparent opacity={0.3} />
+      </mesh>
+
+      {/* Arrow */}
+      <group ref={arrowRef} position={[0, 10, 0]}>
+        <mesh rotation={[Math.PI, 0, 0]}>
+          <coneGeometry args={[2, 4, 4]} />
+          <meshBasicMaterial color="#ffff00" />
+        </mesh>
+      </group>
+    </group>
+  );
+}
 
 function Tree({ position, scale = 1, type = 'normal' }: { position: [number, number, number], scale?: number, type?: 'normal' | 'dead' }) {
   const isDead = type === 'dead';
@@ -444,6 +496,9 @@ export function World() {
       <Pillar position={[22, -2, 14]} scale={1.2} />
       <Pillar position={[-20, -2, -20]} scale={0.8} broken />
       <Pillar position={[-22, -2, -18]} scale={0.8} />
+
+      {/* End Game Passage */}
+      <Passage />
 
       {/* Map Boundaries - Invisible Walls */}
       <RigidBody type="fixed" colliders="cuboid">
