@@ -29,10 +29,10 @@ function Spawner() {
   const stateRef = useRef({
       totalSpawnedInPhase: 0,
       nextWaveTime: 0,
-      spawning: false,
       currentPhase: 1,
       currentRetryCount: 0,
-      isTransitioning: false
+      isTransitioning: false,
+      transitionTimeout: null as NodeJS.Timeout | null
   });
 
   useFrame(({ clock }) => {
@@ -42,11 +42,14 @@ function Spawner() {
     
     // Reset state if phase changed or retryCount changed
     if (state.currentPhase !== phase || state.currentRetryCount !== retryCount) {
+      if (state.transitionTimeout) {
+        clearTimeout(state.transitionTimeout);
+        state.transitionTimeout = null;
+      }
       state.currentPhase = phase;
       state.currentRetryCount = retryCount;
       state.totalSpawnedInPhase = 0;
       state.nextWaveTime = 0;
-      state.spawning = false;
       state.isTransitioning = false;
     }
 
@@ -73,7 +76,6 @@ function Spawner() {
       enemyType = 'lion';
       enemyHealth = 150;
     } else {
-      // Game over or infinite mode
       return;
     }
 
@@ -82,13 +84,13 @@ function Spawner() {
       state.isTransitioning = true;
       if (phase === 1) {
         setPhaseMessage("Parabéns, você venceu os lobos! Prepare-se para enfrentar o Urso.");
-        setTimeout(() => nextPhase(), 5000);
+        state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
       } else if (phase === 2) {
         setPhaseMessage("Parabéns, você venceu os ursos! Prepare-se para enfrentar o poderoso Leão.");
-        setTimeout(() => nextPhase(), 5000);
+        state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
       } else if (phase === 3) {
         setPhaseMessage("VITÓRIA! O LEÃO FOI DERROTADO!");
-        setTimeout(() => {
+        state.transitionTimeout = setTimeout(() => {
           document.exitPointerLock();
           useStore.getState().setStoryScreen(9);
           useStore.getState().setPhaseMessage(null);
@@ -99,14 +101,6 @@ function Spawner() {
 
     if (state.totalSpawnedInPhase >= targetKills) return;
 
-    if (enemies.length >= maxAtOnce) {
-        state.spawning = false;
-        state.nextWaveTime = 0;
-        return;
-    }
-
-    if (state.spawning) return;
-
     const now = clock.getElapsedTime();
 
     if (state.nextWaveTime === 0) {
@@ -114,9 +108,7 @@ function Spawner() {
         return;
     }
 
-    if (now >= state.nextWaveTime) {
-        state.spawning = true;
-        
+    if (now >= state.nextWaveTime && enemies.length < maxAtOnce) {
         const countToSpawn = Math.min(maxAtOnce - enemies.length, targetKills - state.totalSpawnedInPhase);
         for (let i = 0; i < countToSpawn; i++) {
             const angle = Math.random() * Math.PI * 2;
@@ -126,6 +118,7 @@ function Spawner() {
             spawnEnemy([x, 2, z], enemyType, enemyHealth);
         }
         state.totalSpawnedInPhase += countToSpawn;
+        state.nextWaveTime = now + 3; // Wait 3 seconds before checking to spawn more
     }
   });
 
@@ -362,9 +355,11 @@ function AmbientSound() {
   const health = useStore((state) => state.health);
 
   const [audio] = useState(() => {
-    const a = new Audio('https://assets.mixkit.co/active_storage/sfx/246/246-preview.mp3'); // Desert wind howling
+    // Dynamic ambient track
+    const a = new Audio('https://assets.mixkit.co/active_storage/sfx/246/246-preview.mp3'); 
     a.loop = true;
-    a.volume = 0.05; // Lower volume
+    a.volume = 0.15; // Slightly louder and more present
+    a.playbackRate = 1.2; // Faster wind for more tension
     return a;
   });
 
@@ -411,10 +406,11 @@ function CombatMusic() {
   const enemies = useStore((state) => state.enemies);
 
   const [audio] = useState(() => {
-    // Fast-paced drum loop for combat
+    // Fast-paced epic loop for combat
     const a = new Audio('https://assets.mixkit.co/active_storage/sfx/2042/2042-preview.mp3'); 
     a.loop = true;
     a.volume = 0;
+    a.playbackRate = 1.4; // Make it much more animated and dynamic
     return a;
   });
 

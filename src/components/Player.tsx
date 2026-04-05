@@ -7,7 +7,7 @@ import { useStore } from '../store';
 import { enemyRefs } from './Enemy';
 
 const SPEED = 6;
-const JUMP_FORCE = 6;
+const JUMP_FORCE = 8.5;
 const SLING_COOLDOWN = 500; // ms
 const STONE_SPEED = 35;
 
@@ -215,10 +215,15 @@ export function Player() {
   const lastFootstepTime = useRef(0);
 
   useEffect(() => {
+    // More dynamic sling sound (fast swoosh)
     slingSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2067/2067-preview.mp3');
-    slingSound.current.volume = 0.5;
-    knifeSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2952/2952-preview.mp3');
-    knifeSound.current.volume = 0.5;
+    slingSound.current.volume = 0.6;
+    slingSound.current.playbackRate = 1.5; // Faster for more dynamic feel
+
+    // More dynamic knife sound (sword slash instead of clink)
+    knifeSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3');
+    knifeSound.current.volume = 0.6;
+    knifeSound.current.playbackRate = 1.3; // Faster for more dynamic feel
 
     footstepSounds.current = {
       grass: new Audio('https://assets.mixkit.co/active_storage/sfx/216/216-preview.mp3'),
@@ -608,11 +613,11 @@ export function Player() {
     // Double Jump Flip Animation Logic
     if (doubleJumpState.current.active) {
         const elapsed = Date.now() - doubleJumpState.current.startTime;
-        const progress = elapsed / 400; // 400ms flip duration
+        const progress = elapsed / 600; // 600ms flip duration
         
         if (progress < 1) {
             if (rollGroup.current && playerMesh.current) {
-                // Front flip around local X axis
+                // Front flip around local X axis for cambalhota
                 rollGroup.current.rotation.x = progress * Math.PI * 2;
             }
         } else {
@@ -766,7 +771,7 @@ export function Player() {
         } else if (jumpCount.current === 1 && !isGrounded) {
             jumpCount.current = 2;
             lastJumpPressedTime.current = 0; // Consume jump
-            performJump(JUMP_FORCE * 0.8); // Double jump
+            performJump(JUMP_FORCE); // Double jump higher
             
             // Double jump effect
             const pos = playerRef.current.translation();
