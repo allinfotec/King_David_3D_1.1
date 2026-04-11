@@ -283,14 +283,14 @@ function UI() {
       </div>
 
       {/* Bottom Left: Joystick */}
-      <div className="absolute bottom-8 left-8 pointer-events-auto">
+      <div className="absolute bottom-12 left-12 pointer-events-auto">
           <Joystick onMove={handleJoystickMove} onStop={handleJoystickStop} />
       </div>
 
       {/* Bottom Right: Actions (Jump, Weapons) */}
-      <div className="absolute bottom-8 right-8 flex gap-4 pointer-events-auto">
+      <div className="absolute bottom-12 right-12 flex gap-6 pointer-events-auto">
         {/* Column 1: Block above Stone */}
-        <div className="flex flex-col gap-4 items-center justify-end">
+        <div className="flex flex-col gap-6 items-center justify-end">
              {/* Block Button */}
             <button 
                 className="w-16 h-16 bg-green-900/60 border-2 border-green-500 rounded-full active:bg-green-700/80 backdrop-blur-md flex items-center justify-center text-white font-bold text-[10px] hover:bg-green-800/60 transition-all shadow-lg shadow-green-900/30"
@@ -313,7 +313,7 @@ function UI() {
         </div>
 
         {/* Column 2: Jump above Knife */}
-        <div className="flex flex-col gap-4 items-center justify-end">
+        <div className="flex flex-col gap-6 items-center justify-end">
             {/* Jump Button */}
             <button 
                 className="w-20 h-20 bg-gray-800/60 border-2 border-gray-500 rounded-full active:bg-gray-700/80 backdrop-blur-md flex items-center justify-center text-white font-bold text-sm hover:bg-gray-700/60 transition-all shadow-lg"

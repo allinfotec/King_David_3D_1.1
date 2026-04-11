@@ -1,14 +1,62 @@
 import { RigidBody } from '@react-three/rapier';
-import { useTexture, Instance, Instances, Float } from '@react-three/drei';
+import { useTexture, Instance, Instances, Float, Text } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMemo, useRef, useEffect } from 'react';
 import { useStore } from '../store';
 import { playerRef } from './Player';
 
+function Samuel({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      {/* Name Tag */}
+      <Text
+        position={[0, 4.5, 0]}
+        fontSize={0.5}
+        color="#ffd700"
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.05}
+        outlineColor="#000000"
+      >
+        Profeta Samuel
+      </Text>
+      {/* Body - Robe */}
+      <mesh position={[0, 1.5, 0]} castShadow>
+        <cylinderGeometry args={[0.4, 0.6, 3, 16]} />
+        <meshStandardMaterial color="#5c3a21" roughness={0.9} />
+      </mesh>
+      {/* Head */}
+      <mesh position={[0, 3.3, 0]} castShadow>
+        <sphereGeometry args={[0.35, 16, 16]} />
+        <meshStandardMaterial color="#d2b48c" roughness={0.6} />
+      </mesh>
+      {/* Beard */}
+      <mesh position={[0, 3.1, 0.25]} castShadow>
+        <coneGeometry args={[0.25, 0.6, 8]} />
+        <meshStandardMaterial color="#eeeeee" roughness={0.9} />
+      </mesh>
+      {/* Staff */}
+      <mesh position={[0.6, 1.5, 0.4]} rotation={[0, 0, -0.1]} castShadow>
+        <cylinderGeometry args={[0.05, 0.05, 3.5, 8]} />
+        <meshStandardMaterial color="#3e2723" roughness={0.9} />
+      </mesh>
+      {/* Horn of Oil */}
+      <mesh position={[-0.5, 2, 0.4]} rotation={[0, 0, 0.5]} castShadow>
+        <coneGeometry args={[0.1, 0.4, 8]} />
+        <meshStandardMaterial color="#ffd700" roughness={0.3} metalness={0.8} />
+      </mesh>
+      {/* Glowing aura */}
+      <pointLight position={[0, 2, 0]} intensity={2} color="#ffd700" distance={10} />
+    </group>
+  );
+}
+
 function Passage() {
   const isWalkingHome = useStore((state) => state.isWalkingHome);
   const finishGame = useStore((state) => state.finishGame);
+  const startAnointing = useStore((state) => state.startAnointing);
+  const isAnointing = useStore((state) => state.isAnointing);
   const arrowRef = useRef<THREE.Group>(null);
   const smallArrowRef = useRef<THREE.Group>(null);
   const isFinishing = useRef(false);
@@ -23,22 +71,27 @@ function Passage() {
     }
 
     // Update small arrow to be in front of the player and point to the passage
-    if (smallArrowRef.current && playerRef.current) {
-      const pos = playerRef.current.translation();
-      
-      // Target is the passage at [0, 0, -90]
-      const target = new THREE.Vector3(0, pos.y, -90);
-      const playerPos = new THREE.Vector3(pos.x, pos.y, pos.z);
-      
-      // Direction from player to passage
-      const dir = new THREE.Vector3().subVectors(target, playerPos).normalize();
-      
-      // Place small arrow 3 units in front of the player
-      smallArrowRef.current.position.copy(playerPos).add(dir.multiplyScalar(3));
-      smallArrowRef.current.position.y += 1.5 + Math.sin(state.clock.elapsedTime * 5) * 0.2; // Floating effect
-      
-      // Make it point to the passage
-      smallArrowRef.current.lookAt(target);
+    if (smallArrowRef.current) {
+      if (playerRef.current && !isAnointing) {
+        smallArrowRef.current.visible = true;
+        const pos = playerRef.current.translation();
+        
+        // Target is the passage at [0, 0, -90]
+        const target = new THREE.Vector3(0, pos.y, -90);
+        const playerPos = new THREE.Vector3(pos.x, pos.y, pos.z);
+        
+        // Direction from player to passage
+        const dir = new THREE.Vector3().subVectors(target, playerPos).normalize();
+        
+        // Place small arrow 3 units in front of the player
+        smallArrowRef.current.position.copy(playerPos).add(dir.multiplyScalar(3));
+        smallArrowRef.current.position.y += 1.5 + Math.sin(state.clock.elapsedTime * 5) * 0.2; // Floating effect
+        
+        // Make it point to the passage
+        smallArrowRef.current.lookAt(target);
+      } else {
+        smallArrowRef.current.visible = false;
+      }
     }
 
     // Check player position
@@ -46,11 +99,14 @@ function Passage() {
       const pos = playerRef.current.translation();
       // If player is close to the passage
       if (pos.z < -70 && pos.x > -30 && pos.x < 30) {
-        isFinishing.current = true;
-        document.exitPointerLock();
-        setTimeout(() => {
-          finishGame();
-        }, 100);
+        if (!isAnointing) {
+          startAnointing();
+          setTimeout(() => {
+            isFinishing.current = true;
+            document.exitPointerLock();
+            finishGame();
+          }, 4000); // Wait 4 seconds for the anointing animation
+        }
       }
     }
   });
@@ -70,6 +126,9 @@ function Passage() {
 
       {/* The Passage at the back */}
       <group position={[0, -2, -90]}>
+        {/* Prophet Samuel waiting */}
+        <Samuel position={[0, 0, 5]} />
+
         {/* Passage Rocks */}
         <Rock position={[-15, 0, 0]} scale={8} />
         <Rock position={[15, 0, 0]} scale={8} />

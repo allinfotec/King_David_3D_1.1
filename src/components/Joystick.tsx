@@ -12,12 +12,20 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
   const touchStart = useRef({ x: 0, y: 0 });
   const pointerId = useRef<number | null>(null);
   const onStopRef = useRef(onStop);
+  const onMoveRef = useRef(onMove);
 
   useEffect(() => {
     onStopRef.current = onStop;
-  }, [onStop]);
+    onMoveRef.current = onMove;
+  }, [onStop, onMove]);
 
   useEffect(() => {
+    const handleGlobalPointerMove = (e: PointerEvent) => {
+      if (pointerId.current === e.pointerId) {
+        handleMove(e.clientX, e.clientY);
+      }
+    };
+
     const handleGlobalPointerUp = (e: PointerEvent) => {
       if (pointerId.current === e.pointerId) {
         pointerId.current = null;
@@ -27,10 +35,12 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
       }
     };
     
+    window.addEventListener('pointermove', handleGlobalPointerMove);
     window.addEventListener('pointerup', handleGlobalPointerUp);
     window.addEventListener('pointercancel', handleGlobalPointerUp);
     
     return () => {
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
       window.removeEventListener('pointerup', handleGlobalPointerUp);
       window.removeEventListener('pointercancel', handleGlobalPointerUp);
     };
@@ -39,34 +49,10 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (pointerId.current !== null) return; // Already active with another pointer
     
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch (err) {}
     pointerId.current = e.pointerId;
-    
     touchStart.current = { x: e.clientX, y: e.clientY };
     setActive(true);
     handleMove(e.clientX, e.clientY);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!active || e.pointerId !== pointerId.current) return;
-    handleMove(e.clientX, e.clientY);
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerId !== pointerId.current) return;
-    
-    try {
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
-    } catch (err) {}
-    
-    pointerId.current = null;
-    setActive(false);
-    setPosition({ x: 0, y: 0 });
-    onStop();
   };
 
   const handleMove = (clientX: number, clientY: number) => {
@@ -112,7 +98,7 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
       outY = (outY / outDist) * rescale;
     }
 
-    onMove(outX, outY);
+    onMoveRef.current(outX, outY);
   };
 
   return (
@@ -120,10 +106,6 @@ export function Joystick({ onMove, onStop }: JoystickProps) {
       ref={containerRef}
       className="relative w-40 h-40 bg-white/10 border-2 border-white/30 rounded-full backdrop-blur-sm touch-none flex items-center justify-center shadow-lg"
       onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onPointerLeave={handlePointerUp}
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* Inner decorative circle */}

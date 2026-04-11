@@ -7,7 +7,7 @@ import { useStore } from '../store';
 import { enemyRefs } from './Enemy';
 
 const SPEED = 6;
-const JUMP_FORCE = 8.5;
+const JUMP_FORCE = 9.5;
 const SLING_COOLDOWN = 500; // ms
 const STONE_SPEED = 35;
 
@@ -18,7 +18,7 @@ export function Player() {
   const { camera, scene } = useThree();
   const { rapier, world } = useRapier();
   const [lastShot, setLastShot] = useState(0);
-  const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health, retryCount } = useStore();
+  const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health, retryCount, isAnointing } = useStore();
   const playerMesh = useRef<THREE.Group>(null);
   const [weapon, setWeapon] = useState<'sling' | 'knife'>('sling');
   const [isAttacking, setIsAttacking] = useState(false);
@@ -405,11 +405,46 @@ export function Player() {
   });
 
   useFrame((state, delta) => {
-    const { isTransitioningPhase } = useStore.getState();
+    const { isTransitioningPhase, isAnointing } = useStore.getState();
     if (!playerRef.current || isPaused || health <= 0) return;
 
     if (isTransitioningPhase) {
         playerRef.current.setLinvel({ x: 0, y: playerRef.current.linvel().y, z: 0 }, true);
+        return;
+    }
+
+    if (isAnointing) {
+        playerRef.current.setLinvel({ x: 0, y: playerRef.current.linvel().y, z: 0 }, true);
+        
+        // Kneeling animation
+        if (playerMesh.current && leftLeg.current && rightLeg.current && leftArm.current && rightArm.current) {
+            const lerpFactor = 1 - Math.exp(-5 * delta);
+            playerMesh.current.position.y = THREE.MathUtils.lerp(playerMesh.current.position.y, -1.3, lerpFactor);
+            playerMesh.current.rotation.x = THREE.MathUtils.lerp(playerMesh.current.rotation.x, 0.4, lerpFactor);
+            
+            // Bend legs
+            leftLeg.current.rotation.x = THREE.MathUtils.lerp(leftLeg.current.rotation.x, -1.5, lerpFactor);
+            rightLeg.current.rotation.x = THREE.MathUtils.lerp(rightLeg.current.rotation.x, -1.5, lerpFactor);
+            
+            // Force facing forward (negative Z)
+            let rotDiff = 0 - playerMesh.current.rotation.y;
+            while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+            while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+            playerMesh.current.rotation.y += rotDiff * lerpFactor;
+            
+            // Arms down and slightly forward
+            leftArm.current.rotation.x = THREE.MathUtils.lerp(leftArm.current.rotation.x, 0.2, lerpFactor);
+            rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, 0.2, lerpFactor);
+            leftArm.current.rotation.z = THREE.MathUtils.lerp(leftArm.current.rotation.z, 0, lerpFactor);
+            rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, 0, lerpFactor);
+        }
+        
+        // Camera looks at player from front
+        const pos = playerRef.current.translation();
+        const cameraTargetPos = new THREE.Vector3(pos.x, pos.y + 1.5, pos.z - 4);
+        camera.position.lerp(cameraTargetPos, 1 - Math.exp(-2 * delta));
+        camera.lookAt(pos.x, pos.y + 0.5, pos.z);
+        
         return;
     }
 
@@ -1002,10 +1037,24 @@ export function Player() {
         lockRotations
         userData={{ type: 'player' }}
       >
-      <CapsuleCollider args={[0.75, 0.5]} />
+      <CapsuleCollider args={[0.75, 0.5]} friction={0} />
       
       {/* Visible Player Model - Young David - High Res */}
       <group ref={playerMesh} position={[0, -0.8, 0]}>
+        {isAnointing && (
+          <group position={[0, 10, 0]}>
+            <spotLight 
+              angle={0.4} 
+              penumbra={0.5} 
+              intensity={80} 
+              color="#ffffcc" 
+              castShadow 
+              distance={20}
+              target={playerMesh.current || undefined}
+            />
+            <pointLight intensity={10} color="#ffffff" distance={15} />
+          </group>
+        )}
         <group ref={rollGroup}>
           {/* Tunic (Body) - Better shape */}
           <mesh castShadow position={[0, 0.6, 0]}>

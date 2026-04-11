@@ -23,6 +23,12 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
   }, [onAim, onAttack]);
 
   useEffect(() => {
+    const handleGlobalPointerMove = (e: PointerEvent) => {
+      if (pointerId.current === e.pointerId) {
+        handleMove(e.clientX, e.clientY);
+      }
+    };
+
     const handleGlobalPointerUp = (e: PointerEvent) => {
       if (pointerId.current === e.pointerId) {
         pointerId.current = null;
@@ -33,10 +39,12 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
       }
     };
     
+    window.addEventListener('pointermove', handleGlobalPointerMove);
     window.addEventListener('pointerup', handleGlobalPointerUp);
     window.addEventListener('pointercancel', handleGlobalPointerUp);
     
     return () => {
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
       window.removeEventListener('pointerup', handleGlobalPointerUp);
       window.removeEventListener('pointercancel', handleGlobalPointerUp);
     };
@@ -45,20 +53,15 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (pointerId.current !== null) return;
     
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch (err) {}
     pointerId.current = e.pointerId;
-    
     touchStart.current = { x: e.clientX, y: e.clientY };
     setActive(true);
+    handleMove(e.clientX, e.clientY);
   };
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!active || e.pointerId !== pointerId.current) return;
-    
-    const dx = e.clientX - touchStart.current.x;
-    const dy = e.clientY - touchStart.current.y;
+  const handleMove = (clientX: number, clientY: number) => {
+    const dx = clientX - touchStart.current.x;
+    const dy = clientY - touchStart.current.y;
     
     const distance = Math.sqrt(dx * dx + dy * dy);
     const maxVisualDist = 40; // Max visual radius
@@ -98,23 +101,7 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
       outY = (outY / outDist) * rescale;
     }
 
-    onAim(outX, outY);
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerId !== pointerId.current) return;
-    
-    try {
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
-    } catch (err) {}
-    
-    pointerId.current = null;
-    setActive(false);
-    setPosition({ x: 0, y: 0 });
-    onAim(0, 0);
-    onAttack(); // Fire attack when released
+    onAimRef.current(outX, outY);
   };
 
   return (
@@ -122,10 +109,6 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
       ref={containerRef}
       className={`relative w-[80px] h-[80px] p-3 rounded-xl border-2 flex flex-col items-center justify-center transition-all backdrop-blur-md touch-none select-none ${colorClass}`}
       onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onPointerLeave={handlePointerUp}
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* The actual button content */}

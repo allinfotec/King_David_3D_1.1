@@ -59,6 +59,12 @@ const STORY_SCREENS = [
   },
   {
     id: 10,
+    bgPrompt: "Young David walking back home through a beautiful valley at sunset, carrying his staff and sling. Cinematic lighting, peaceful atmosphere",
+    text: "Caminhando de volta para casa, Davi avistou uma figura familiar o esperando. Era o profeta Samuel, que havia viajado até Belém com um propósito divino.",
+    buttons: ['next']
+  },
+  {
+    id: 11,
     bgPrompt: "Prophet Samuel anointing young David with oil in a rustic house, biblical scene, cinematic lighting, masterpiece",
     text: "Deus via o coração do jovem pastor. Quando o profeta Samuel visitou sua casa, entre todos os filhos de Jessé, Deus escolheu o menor para ser o futuro rei de Israel, ungindo-o com óleo.",
     buttons: ['finish']
