@@ -37,6 +37,7 @@ interface GameState {
   isAnointing: boolean;
   storyScreen: number;
   retryCount: number;
+  volume: number;
   stones: Stone[];
   enemies: Enemy[];
   effects: Effect[];
@@ -67,6 +68,7 @@ interface GameState {
   setWalkingHome: (walking: boolean) => void;
   startAnointing: () => void;
   finishGame: () => void;
+  setVolume: (volume: number) => void;
 }
 
 export const useStore = create<GameState>((set) => ({
@@ -84,6 +86,7 @@ export const useStore = create<GameState>((set) => ({
   isAnointing: false,
   storyScreen: 1,
   retryCount: 0,
+  volume: 1,
   stones: [],
   enemies: [],
   effects: [],
@@ -146,4 +149,5 @@ export const useStore = create<GameState>((set) => ({
   setWalkingHome: (walking) => set({ isWalkingHome: walking }),
   startAnointing: () => set({ isAnointing: true }),
   finishGame: () => set({ storyScreen: 11, isStarted: false, isWalkingHome: false, isAnointing: false }),
+  setVolume: (volume) => set({ volume }),
 }));

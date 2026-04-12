@@ -126,7 +126,7 @@ function Spawner() {
 }
 
 function UI() {
-  const { health, score, isPaused, reset, retryPhase, togglePause, enemies, phase, phaseMessage, isWalkingHome } = useStore();
+  const { health, score, isPaused, reset, retryPhase, togglePause, enemies, phase, phaseMessage, isWalkingHome, volume, setVolume } = useStore();
 
   useEffect(() => {
     if (health <= 0) {
@@ -269,8 +269,8 @@ function UI() {
         </div>
       )}
       
-      {/* Top Right: Pause Button */}
-      <div className="absolute top-4 right-4 pointer-events-auto">
+      {/* Top Right: Pause Button & Volume */}
+      <div className="absolute top-4 right-4 pointer-events-auto flex flex-col items-end gap-2">
         <button 
           onClick={() => {
             togglePause();
@@ -280,6 +280,19 @@ function UI() {
         >
           PAUSAR (P)
         </button>
+        
+        <div className="bg-black/50 backdrop-blur-sm p-2 rounded border border-white/20 flex flex-col items-center gap-1">
+          <span className="text-white text-xs font-bold">VOLUME</span>
+          <input 
+            type="range" 
+            min="0" 
+            max="1" 
+            step="0.01" 
+            value={volume}
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="w-24 accent-yellow-500"
+          />
+        </div>
       </div>
 
       {/* Bottom Left: Joystick */}
@@ -353,15 +366,20 @@ function UI() {
 function AmbientSound() {
   const isPaused = useStore((state) => state.isPaused);
   const health = useStore((state) => state.health);
+  const volume = useStore((state) => state.volume);
 
   const [audio] = useState(() => {
     // Dynamic ambient track
     const a = new Audio('https://assets.mixkit.co/active_storage/sfx/246/246-preview.mp3'); 
     a.loop = true;
-    a.volume = 0.15; // Slightly louder and more present
+    a.volume = 0.15 * volume; // Slightly louder and more present
     a.playbackRate = 1.2; // Faster wind for more tension
     return a;
   });
+
+  useEffect(() => {
+    audio.volume = 0.15 * volume;
+  }, [volume, audio]);
 
   useEffect(() => {
     if (isPaused || health <= 0) {
@@ -404,6 +422,7 @@ function CombatMusic() {
   const isPaused = useStore((state) => state.isPaused);
   const health = useStore((state) => state.health);
   const enemies = useStore((state) => state.enemies);
+  const volume = useStore((state) => state.volume);
 
   const [audio] = useState(() => {
     // Fast-paced epic loop for combat
@@ -431,7 +450,7 @@ function CombatMusic() {
             audio.play().catch(() => {});
         }
         // Adjust volume based on number of enemies (max volume 0.4)
-        const targetVolume = Math.min(0.4, 0.1 + enemies.length * 0.1);
+        const targetVolume = Math.min(0.4, 0.1 + enemies.length * 0.1) * volume;
         
         // Smooth volume transition
         const fadeInterval = setInterval(() => {
@@ -457,7 +476,7 @@ function CombatMusic() {
         }, 100);
         return () => clearInterval(fadeInterval);
     }
-  }, [enemies.length, isPaused, health, audio]);
+  }, [enemies.length, isPaused, health, audio, volume]);
 
   return null;
 }

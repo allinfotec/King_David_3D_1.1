@@ -98,7 +98,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                 
                 // Dodge sound
                 const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2065/2065-preview.mp3');
-                audio.volume = 0.4;
+                audio.volume = 0.4 * useStore.getState().volume;
                 audio.playbackRate = 1.5;
                 audio.play().catch(() => {});
                 
@@ -112,7 +112,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                 
                 // Block sound
                 const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/217/217-preview.mp3');
-                audio.volume = 0.5;
+                audio.volume = 0.5 * useStore.getState().volume;
                 audio.playbackRate = 0.8;
                 audio.play().catch(() => {});
                 
@@ -188,13 +188,13 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
               if (type === 'lion') {
                   // Loud berserk roar
                   const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3');
-                  audio.volume = 1.0;
+                  audio.volume = 1.0 * useStore.getState().volume;
                   audio.playbackRate = 0.4 + Math.random() * 0.1; // Very deep, menacing roar
                   audio.play().catch(() => {});
               } else if (type === 'bear') {
                   // Bear berserk roar
                   const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/218/218-preview.mp3');
-                  audio.volume = 1.0;
+                  audio.volume = 1.0 * useStore.getState().volume;
                   audio.playbackRate = 0.5 + Math.random() * 0.1;
                   audio.play().catch(() => {});
               }
@@ -213,13 +213,13 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
               }
               const audio = new Audio(audioUrl);
               if (type === 'lion') {
-                  audio.volume = 1.0;
+                  audio.volume = 1.0 * useStore.getState().volume;
                   audio.playbackRate = 0.5 + Math.random() * 0.2; // Deep lion roar
               } else if (type === 'bear') {
-                  audio.volume = 0.8;
+                  audio.volume = 0.8 * useStore.getState().volume;
                   audio.playbackRate = 0.6 + Math.random() * 0.2; // Bear growl
               } else {
-                  audio.volume = 0.5;
+                  audio.volume = 0.5 * useStore.getState().volume;
                   audio.playbackRate = 1.2 + Math.random() * 0.3; // Wolf snarl
               }
               audio.play().catch(() => {});
@@ -334,7 +334,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                           audioUrl = 'https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3';
                       }
                       const audio = new Audio(audioUrl); 
-                      audio.volume = type === 'bear' ? 0.9 : type === 'lion' ? 1.0 : 0.6;
+                      audio.volume = (type === 'bear' ? 0.9 : type === 'lion' ? 1.0 : 0.6) * useStore.getState().volume;
                       audio.playbackRate = type === 'bear' ? 0.7 + Math.random() * 0.2 : type === 'lion' ? 0.8 + Math.random() * 0.2 : 1.4 + Math.random() * 0.3;
                       audio.play().catch(() => {});
                       
@@ -377,7 +377,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           if (type === 'lion' && now - lastRoarTime.current > 4000) {
               if (Math.random() < 0.4) { // 40% chance every 4 seconds
                   const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3');
-                  audio.volume = 1.0;
+                  audio.volume = 1.0 * useStore.getState().volume;
                   audio.playbackRate = 0.5; // Deeper, longer roar
                   audio.play().catch(() => {});
               }
@@ -648,7 +648,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           
           // Play hit sound based on type
           const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/216/216-preview.mp3');
-          audio.volume = type === 'bear' ? 0.7 : type === 'lion' ? 0.9 : 0.5;
+          audio.volume = (type === 'bear' ? 0.7 : type === 'lion' ? 0.9 : 0.5) * useStore.getState().volume;
           audio.playbackRate = type === 'bear' ? 0.7 : type === 'lion' ? 0.8 : 1.2;
           audio.play().catch(() => {});
           
