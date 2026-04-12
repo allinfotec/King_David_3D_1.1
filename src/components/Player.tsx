@@ -18,7 +18,7 @@ export function Player() {
   const { camera, scene } = useThree();
   const { rapier, world } = useRapier();
   const [lastShot, setLastShot] = useState(0);
-  const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health, retryCount, isAnointing } = useStore();
+  const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health, retryCount, isAnointing, volume } = useStore();
   const playerMesh = useRef<THREE.Group>(null);
   const [weapon, setWeapon] = useState<'sling' | 'knife'>('sling');
   const [isAttacking, setIsAttacking] = useState(false);
@@ -234,6 +234,14 @@ export function Player() {
     footstepSounds.current.sand.volume = 0.15;
     footstepSounds.current.rock.volume = 0.25;
   }, []);
+
+  useEffect(() => {
+    if (slingSound.current) slingSound.current.volume = 0.6 * volume;
+    if (knifeSound.current) knifeSound.current.volume = 0.6 * volume;
+    if (footstepSounds.current.grass) footstepSounds.current.grass.volume = 0.2 * volume;
+    if (footstepSounds.current.sand) footstepSounds.current.sand.volume = 0.15 * volume;
+    if (footstepSounds.current.rock) footstepSounds.current.rock.volume = 0.25 * volume;
+  }, [volume]);
 
   // Attack handler
   useEffect(() => {

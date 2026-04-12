@@ -281,8 +281,8 @@ function UI() {
           PAUSAR (P)
         </button>
         
-        <div className="bg-black/50 backdrop-blur-sm p-2 rounded border border-white/20 flex flex-col items-center gap-1">
-          <span className="text-white text-xs font-bold">VOLUME</span>
+        <div className="bg-black/50 backdrop-blur-sm p-1.5 rounded border border-white/20 flex flex-col items-center gap-0.5">
+          <span className="text-white text-[10px] font-bold">VOL</span>
           <input 
             type="range" 
             min="0" 
@@ -290,7 +290,7 @@ function UI() {
             step="0.01" 
             value={volume}
             onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="w-24 accent-yellow-500"
+            className="w-16 h-1 accent-yellow-500"
           />
         </div>
       </div>
