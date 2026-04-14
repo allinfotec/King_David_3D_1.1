@@ -7,7 +7,7 @@ const STORY_SCREENS = [
     id: 1,
     bgPrompt: "beautiful green hills and fields with a shepherd tending sheep",
     text: "",
-    buttons: ['start_intro']
+    buttons: ['start_intro', 'start_extra']
   },
   {
     id: 2,
@@ -68,6 +68,12 @@ const STORY_SCREENS = [
     bgPrompt: "Prophet Samuel anointing young David with oil in a rustic house, biblical scene, cinematic lighting, masterpiece",
     text: "Deus via o coração do jovem pastor. Quando o profeta Samuel visitou sua casa, entre todos os filhos de Jessé, Deus escolheu o menor para ser o futuro rei de Israel, ungindo-o com óleo.",
     buttons: ['finish']
+  },
+  {
+    id: 12,
+    bgPrompt: "David as a young king on a white horse, leading an army of Israelite soldiers. Philistine army in the distance. Epic battlefield, cinematic lighting, low poly style",
+    text: "Anos se passaram. O jovem pastor tornou-se um guerreiro ungido. Agora, montado em seu cavalo, Davi lidera o exército de Israel contra a opressão dos Filisteus.",
+    buttons: ['fight_philistines']
   }
 ];
 
@@ -108,6 +114,14 @@ export function StoryScreen() {
       }, 100);
     } else if (action === 'walk_home') {
       useStore.getState().startWalkingHome();
+      setTimeout(() => {
+        const canvas = document.querySelector('canvas');
+        canvas?.requestPointerLock();
+      }, 100);
+    } else if (action === 'start_extra') {
+      setStoryScreen(12);
+    } else if (action === 'fight_philistines') {
+      useStore.getState().startExtraGame();
       setTimeout(() => {
         const canvas = document.querySelector('canvas');
         canvas?.requestPointerLock();
@@ -269,6 +283,28 @@ export function StoryScreen() {
             >
               Iniciar o Jogo
               <ChevronRight size={24} />
+            </button>
+          )}
+
+          {screenData.buttons.includes('start_extra') && (
+            <button 
+              onClick={() => handleAction('start_extra')}
+              className="px-8 py-3 bg-blue-600/80 border-2 border-blue-400 rounded-full flex items-center gap-3 text-white font-bold hover:bg-blue-500 transition-all hover:scale-105 backdrop-blur-sm shadow-[0_0_20px_rgba(37,99,235,0.5)]"
+              style={{ fontFamily: "'Montserrat', sans-serif" }}
+            >
+              MODO EXTRA: GUERRA
+              <ChevronRight size={24} />
+            </button>
+          )}
+
+          {screenData.buttons.includes('fight_philistines') && (
+            <button 
+              onClick={() => handleAction('fight_philistines')}
+              className="px-8 py-3 bg-red-900/80 border-2 border-red-500 rounded-full flex items-center gap-3 text-white font-bold hover:bg-red-800 transition-all hover:scale-105 backdrop-blur-sm shadow-[0_0_20px_rgba(220,38,38,0.5)]"
+              style={{ fontFamily: "'Montserrat', sans-serif" }}
+            >
+              <ShieldAlert size={24} />
+              BATALHAR CONTRA FILISTEUS
             </button>
           )}
 

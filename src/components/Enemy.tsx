@@ -13,7 +13,7 @@ interface EnemyProps {
   position: [number, number, number];
   health: number;
   maxHealth: number;
-  type: 'wolf' | 'bear' | 'lion';
+  type: 'wolf' | 'bear' | 'lion' | 'philistine_soldier' | 'philistine_archer' | 'philistine_heavy' | 'goliath';
 }
 
 export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
@@ -56,15 +56,50 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   const lastSeenPlayer = useRef<number>(0);
 
   const lastAttackTime = useRef<number>(0);
+  const attackStartTime = useRef<number>(0);
   const lastRoarTime = useRef<number>(0);
   const ATTACK_COOLDOWN = type === 'bear' ? 3000 : type === 'lion' ? 1500 : 2000;
   const isAttacking = useRef(false);
+  const isHumanoid = type.startsWith('philistine') || type === 'goliath';
 
   // Stats based on type
-  const ENEMY_SPEED = type === 'bear' ? 4.5 : type === 'lion' ? 8.5 : 6.0; // Increased speeds
-  const ATTACK_DAMAGE = type === 'bear' ? 25 : type === 'lion' ? 35 : 15;
-  const SCALE = type === 'bear' ? 1.45 : type === 'lion' ? 1.5 : 0.95; // Increased wolf scale from 0.7 to 0.95
-  const BODY_COLOR = type === 'bear' ? '#4a2e15' : type === 'lion' ? '#f4d03f' : '#45454a'; // Wolf grey
+  const getEnemySpeed = () => {
+    if (type === 'goliath') return 3.5;
+    if (type === 'philistine_heavy') return 4.0;
+    if (type === 'philistine_archer') return 5.5;
+    if (type === 'philistine_soldier') return 5.0;
+    return type === 'bear' ? 4.5 : type === 'lion' ? 8.5 : 6.0;
+  };
+
+  const getAttackDamage = () => {
+    if (type === 'goliath') return 60;
+    if (type === 'philistine_heavy') return 30;
+    if (type === 'philistine_archer') return 15;
+    if (type === 'philistine_soldier') return 20;
+    return type === 'bear' ? 25 : type === 'lion' ? 35 : 15;
+  };
+
+  const getScale = () => {
+    if (type === 'goliath') return 3.5;
+    if (type === 'philistine_heavy') return 1.2;
+    if (type === 'philistine_archer') return 1.0;
+    if (type === 'philistine_soldier') return 1.1;
+    return type === 'bear' ? 1.45 : type === 'lion' ? 1.5 : 0.95;
+  };
+
+  const ENEMY_SPEED = getEnemySpeed();
+  const ATTACK_DAMAGE = getAttackDamage();
+  const SCALE = getScale();
+  
+  const getBodyColor = () => {
+    if (type === 'goliath') return '#d4af37'; // Gold
+    if (type === 'philistine_heavy') return '#37474f'; // Darker iron
+    if (type === 'philistine_archer') return '#5d4037'; // Darker leather
+    if (type === 'philistine_soldier') return '#263238'; // Darker slate
+    return type === 'bear' ? '#4a2e15' : type === 'lion' ? '#f4d03f' : '#45454a';
+  };
+
+  const BODY_COLOR = getBodyColor();
   const MANE_COLOR = type === 'bear' ? '#2e1c0d' : type === 'lion' ? '#8b3a1a' : '#222225'; // Darker grey for wolf ruff
   const EYE_COLOR = type === 'bear' ? '#ff4400' : type === 'lion' ? '#ffaa00' : '#ff2200'; // Piercing red/orange for wolf
   const NOSE_COLOR = type === 'lion' ? '#3e2723' : '#111'; // Dark brown nose for lion
@@ -277,20 +312,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
       // Attack Logic
       if (distToPlayer < 3 && !isAttacking.current && now - lastAttackTime.current > (state === 'berserk' ? ATTACK_COOLDOWN * 0.5 : ATTACK_COOLDOWN)) {
           isAttacking.current = true;
-          
-          // Wind up animation (visual only)
-          if (group.current) {
-              if (type === 'bear') {
-                  group.current.position.y = 1.0; // Rear up high
-                  group.current.rotation.x = -0.6; // Lean way back
-              } else if (type === 'lion') {
-                  group.current.position.y = -0.2; // Crouch low
-                  group.current.rotation.x = -0.3; // Lean back slightly
-              } else {
-                  group.current.position.y = 0.2;
-                  group.current.rotation.x = -0.5; // Lean back
-              }
-          }
+          attackStartTime.current = Date.now();
           
           setTimeout(() => {
               // Lunge / Attack
@@ -305,26 +327,40 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                   } else {
                       rigidBody.current.applyImpulse({ x: lungeDir.x * 20, y: 2, z: lungeDir.z * 20 }, true);
                   }
-                  
-                  // Visual Lunge
-                  if (group.current) {
-                      if (type === 'bear') {
-                          group.current.position.y = 0; // Slam down
-                          group.current.rotation.x = 0.6; // Slam forward
-                      } else if (type === 'lion') {
-                          group.current.position.y = 0.5; // Pounce up
-                          group.current.rotation.x = 0.4; // Lean forward
-                      } else {
-                          group.current.rotation.x = 0.5; // Lean forward
-                      }
-                  }
 
                   // Check Hit
                   const hitDist = new THREE.Vector3(currentPos.x, 0, currentPos.z).distanceTo(new THREE.Vector3(pPos.x, 0, pPos.z));
                   if (hitDist < 3.5 && !useStore.getState().isDodging) {
                       const isPlayerBlocking = useStore.getState().isBlocking;
-                      const finalDamage = isPlayerBlocking ? ATTACK_DAMAGE * 0.2 : ATTACK_DAMAGE; // 80% damage reduction when blocking
-                      takeDamage(finalDamage);
+                      const isExtraGame = useStore.getState().isExtraGame;
+                      
+                      if (isPlayerBlocking) {
+                          // Block sound
+                          const blockAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2952/2952-preview.mp3'); 
+                          blockAudio.volume = 0.5;
+                          blockAudio.playbackRate = 0.5;
+                          blockAudio.play().catch(() => {});
+                          
+                          // Visual feedback for block
+                          useStore.getState().addEffect([pPos.x, pPos.y + 1, pPos.z], 'flash');
+                          
+                          // Counter-attack logic for extra phase
+                          if (isExtraGame) {
+                              // David deals damage back to the enemy
+                              damageEnemy(id, 25);
+                              addEffect([currentPos.x, currentPos.y + 1, currentPos.z], 'impact');
+                              
+                              // Visual feedback for counter-attack
+                              if (group.current) {
+                                  group.current.position.z -= 0.5; // Push enemy back
+                              }
+                          }
+                          
+                          // Reduced damage when blocking
+                          takeDamage(ATTACK_DAMAGE * 0.2);
+                      } else {
+                          takeDamage(ATTACK_DAMAGE);
+                      }
                       
                       // Attack Sound
                       let audioUrl = 'https://assets.mixkit.co/active_storage/sfx/215/215-preview.mp3';
@@ -442,17 +478,45 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
         }
     }
 
-    // Animation (Idle/Run/Dodge/Block/Stagger)
-    if (group.current && !isAttacking.current) {
+    // Animation (Idle/Run/Dodge/Block/Stagger/Attack)
+    if (group.current) {
+      const lerpFactor = 1 - Math.exp(-15 * delta);
       let freq = 8;
       if (state === 'chase') freq = 15;
       if (state === 'evade') freq = 20;
       if (state === 'flank') freq = 12;
       if (state === 'wait') freq = 6;
-      
-      const lerpFactor = 1 - Math.exp(-15 * delta);
-      
-      if (isDodgingEnemy) {
+
+      if (isAttacking.current) {
+          const attackTime = Date.now() - attackStartTime.current;
+          // Wind up (0-400ms)
+          if (attackTime < 400) {
+              const progress = attackTime / 400;
+              if (type === 'bear') {
+                  group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 1.0, progress * 0.2);
+                  group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, -0.6, progress * 0.2);
+              } else if (type === 'lion') {
+                  group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, -0.2, progress * 0.2);
+                  group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, -0.3, progress * 0.2);
+              } else {
+                  group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0.2, progress * 0.2);
+                  group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, -0.5, progress * 0.2);
+              }
+          } else if (attackTime < 900) {
+              // Lunge (400-900ms)
+              const progress = (attackTime - 400) / 500;
+              if (type === 'bear') {
+                  group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0, progress);
+                  group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.6, progress);
+              } else if (type === 'lion') {
+                  group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0.5, progress);
+                  group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.4, progress);
+              } else {
+                  group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.5, progress);
+              }
+          }
+      } else {
+          if (isDodgingEnemy) {
           // Quick sidestep, no spin
           group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, dodgeDir.current * 0.3, lerpFactor * 0.8);
           group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0.2, lerpFactor);
@@ -501,6 +565,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
              group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0, lerpFactor);
              group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, lerpFactor);
           }
+      }
       }
       
       // Leg Animation
@@ -613,7 +678,15 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
     if (newHealth <= 0) {
       isDeadRef.current = true;
       setIsDead(true);
-      addScore(50);
+      const scoreAmount = type === 'goliath' ? 5000 : type === 'lion' ? 500 : type === 'bear' ? 200 : 100;
+      addScore(scoreAmount);
+      
+      if (useStore.getState().isExtraGame) {
+          const coinAmount = type === 'goliath' ? 1000 : type === 'philistine_heavy' ? 50 : type === 'philistine_archer' ? 30 : 20;
+          useStore.getState().addCoins(coinAmount);
+          useStore.getState().addFaith(5); // 5% faith per kill
+      }
+      
       incrementKills();
       
       if (rigidBody.current) {
@@ -632,6 +705,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
       }
 
       setTimeout(() => {
+        enemyRefs.delete(id);
         removeEnemy(id);
       }, 2000);
     } else {
@@ -707,12 +781,76 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
         )}
 
         {/* Enemy Body - High Res & Menacing */}
-        <group position={[0, 0.4, 0]}>
-           {/* Main Body - Muscular */}
-          <mesh ref={bodyRef} castShadow position={[0, 0.1, 0.1]} rotation={[Math.PI / 2, 0, 0]}>
-            <capsuleGeometry args={type === 'bear' ? [0.6, 1.2, 16, 32] : type === 'lion' ? [0.35, 1.1, 16, 32] : [0.32, 1.0, 12, 16]} />
-            <meshPhysicalMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.9} />
-          </mesh>
+        <group position={[0, isHumanoid ? 0.9 : 0.4, 0]}>
+           {/* Humanoid Body */}
+           {isHumanoid ? (
+             <group>
+               {/* Torso - Armor */}
+               <mesh ref={bodyRef} castShadow position={[0, 0.4, 0]}>
+                 <boxGeometry args={[0.5, 0.8, 0.3]} />
+                 <meshPhysicalMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.5} metalness={isHumanoid ? 0.7 : 0.4} />
+               </mesh>
+               {/* Breastplate Detail */}
+               <mesh position={[0, 0.45, 0.1]} scale={[1.05, 1, 1.1]}>
+                  <boxGeometry args={[0.45, 0.6, 0.1]} />
+                  <meshPhysicalMaterial color={type === 'goliath' ? "#ffd700" : "#78909c"} metalness={0.8} roughness={0.2} />
+               </mesh>
+               {/* Head */}
+               <mesh position={[0, 1.0, 0]}>
+                 <sphereGeometry args={[0.25, 16, 16]} />
+                 <meshPhysicalMaterial color="#d2b48c" roughness={0.9} />
+               </mesh>
+               {/* Helmet */}
+               <mesh position={[0, 1.1, 0]} rotation={[-0.2, 0, 0]}>
+                 <sphereGeometry args={[0.26, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                 <meshPhysicalMaterial color={type === 'goliath' ? "#ffd700" : "#555"} metalness={0.8} roughness={0.2} />
+               </mesh>
+               {/* Arms */}
+               <group position={[0.35, 0.7, 0]} ref={legFRRef}>
+                 <mesh position={[0, -0.3, 0]}>
+                   <boxGeometry args={[0.15, 0.6, 0.15]} />
+                   <meshPhysicalMaterial color="#d2b48c" />
+                 </mesh>
+                 {/* Weapon */}
+                 <mesh position={[0, -0.6, 0.2]} rotation={[Math.PI / 2, 0, 0]}>
+                   <cylinderGeometry args={[0.02, 0.02, 1.2]} />
+                   <meshPhysicalMaterial color="#888" metalness={0.8} />
+                 </mesh>
+               </group>
+               <group position={[-0.35, 0.7, 0]} ref={legFLRef}>
+                 <mesh position={[0, -0.3, 0]}>
+                   <boxGeometry args={[0.15, 0.6, 0.15]} />
+                   <meshPhysicalMaterial color="#d2b48c" />
+                 </mesh>
+                 {/* Shield for heavy */}
+                 {type === 'philistine_heavy' && (
+                   <mesh position={[-0.1, -0.2, 0.2]} rotation={[0, 0.2, 0]}>
+                     <boxGeometry args={[0.6, 0.8, 0.05]} />
+                     <meshPhysicalMaterial color="#444" metalness={0.6} />
+                   </mesh>
+                 )}
+               </group>
+               {/* Legs */}
+               <group position={[0.15, 0, 0]} ref={legBRRef}>
+                 <mesh position={[0, -0.4, 0]}>
+                   <boxGeometry args={[0.2, 0.8, 0.2]} />
+                   <meshPhysicalMaterial color="#222" />
+                 </mesh>
+               </group>
+               <group position={[-0.15, 0, 0]} ref={legBLRef}>
+                 <mesh position={[0, -0.4, 0]}>
+                   <boxGeometry args={[0.2, 0.8, 0.2]} />
+                   <meshPhysicalMaterial color="#222" />
+                 </mesh>
+               </group>
+             </group>
+           ) : (
+             <>
+              {/* Main Body - Muscular */}
+              <mesh ref={bodyRef} castShadow position={[0, 0.1, 0.1]} rotation={[Math.PI / 2, 0, 0]}>
+                <capsuleGeometry args={type === 'bear' ? [0.6, 1.2, 16, 32] : type === 'lion' ? [0.35, 1.1, 16, 32] : [0.32, 1.0, 12, 16]} />
+                <meshPhysicalMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.9} />
+              </mesh>
           
           {/* Fur/Mane - Spiky and dark */}
           {type === 'lion' ? (
@@ -782,12 +920,13 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
             </group>
           )}
 
-          {/* Head - More detailed */}
-          <group ref={headRef} position={[0, 0.4, 0.7]}>
-            <mesh castShadow>
-              <boxGeometry args={type === 'bear' ? [0.65, 0.55, 0.7] : type === 'lion' ? [0.5, 0.6, 0.7] : [0.4, 0.45, 0.6]} />
-              <meshPhysicalMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.9} />
-            </mesh>
+          {/* Head - More detailed (Beasts only) */}
+          {!isHumanoid && (
+            <group ref={headRef} position={[0, 0.4, 0.7]}>
+              <mesh castShadow>
+                <boxGeometry args={type === 'bear' ? [0.65, 0.55, 0.7] : type === 'lion' ? [0.5, 0.6, 0.7] : [0.4, 0.45, 0.6]} />
+                <meshPhysicalMaterial color={isStaggered ? "#800" : BODY_COLOR} roughness={0.9} />
+              </mesh>
             
             {/* Glowing Eyes - Angled/Angry */}
             <mesh position={[0.18, 0.1, 0.25]} rotation={[0, -0.2, type === 'lion' ? 0.3 : 0]}>
@@ -877,8 +1016,12 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
               </>
             )}
           </group>
+        )}
+      </>
+    )}
 
-          {/* Legs - Thicker and Animated */}
+    {/* Legs - Thicker and Animated (Beasts only) */}
+        {!isHumanoid && (
           <group>
               <group ref={legFLRef} position={[type === 'bear' ? 0.35 : type === 'lion' ? 0.3 : 0.25, 0, 0.4]}>
                 <mesh position={[0, -0.4, 0]} rotation={[0.2, 0, 0]}>
@@ -905,45 +1048,50 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                 </mesh>
               </group>
           </group>
-          
-          {/* Tail - Bushy */}
-          {type === 'wolf' && (
-            <group ref={tailRef} position={[0, 0.2, -0.6]} rotation={[-0.4, 0, 0]}>
-               <mesh position={[0, -0.3, 0]}>
-                 <capsuleGeometry args={[0.12, 0.5, 8, 8]} />
-                 <meshPhysicalMaterial color={BODY_COLOR} roughness={0.8} />
-               </mesh>
-               <mesh position={[0, -0.6, 0]}>
-                 <coneGeometry args={[0.12, 0.3, 8]} />
-                 <meshPhysicalMaterial color={MANE_COLOR} roughness={0.8} />
-               </mesh>
-            </group>
-          )}
-          {type === 'lion' && (
-            <group ref={tailRef} position={[0, 0.3, -0.5]} rotation={[0.5, 0, 0]}>
-               <mesh position={[0, -0.4, 0]}>
-                 <cylinderGeometry args={[0.04, 0.02, 0.9, 8]} />
-                 <meshPhysicalMaterial color={BODY_COLOR} />
-               </mesh>
-               {/* Tail Tuft */}
-               <mesh position={[0, -0.9, 0]}>
+        )}
+        
+        {/* Tail - Bushy (Beasts only) */}
+        {!isHumanoid && (
+          <>
+            {type === 'wolf' && (
+              <group ref={tailRef} position={[0, 0.2, -0.6]} rotation={[-0.4, 0, 0]}>
+                 <mesh position={[0, -0.3, 0]}>
+                   <capsuleGeometry args={[0.12, 0.5, 8, 8]} />
+                   <meshPhysicalMaterial color={BODY_COLOR} roughness={0.8} />
+                 </mesh>
+                 <mesh position={[0, -0.6, 0]}>
+                   <coneGeometry args={[0.12, 0.3, 8]} />
+                   <meshPhysicalMaterial color={MANE_COLOR} roughness={0.8} />
+                 </mesh>
+              </group>
+            )}
+            {type === 'lion' && (
+              <group ref={tailRef} position={[0, 0.3, -0.5]} rotation={[0.5, 0, 0]}>
+                 <mesh position={[0, -0.4, 0]}>
+                   <cylinderGeometry args={[0.04, 0.02, 0.9, 8]} />
+                   <meshPhysicalMaterial color={BODY_COLOR} />
+                 </mesh>
+                 {/* Tail Tuft */}
+                 <mesh position={[0, -0.9, 0]}>
+                   <sphereGeometry args={[0.15, 8, 8]} />
+                   <meshPhysicalMaterial color={MANE_COLOR} />
+                 </mesh>
+                 <mesh position={[0, -1.0, 0]}>
+                   <coneGeometry args={[0.15, 0.2, 8]} />
+                   <meshPhysicalMaterial color={MANE_COLOR} />
+                 </mesh>
+              </group>
+            )}
+            {type === 'bear' && (
+              <mesh position={[0, 0.2, -0.4]} rotation={[-0.4, 0, 0]}>
                  <sphereGeometry args={[0.15, 8, 8]} />
-                 <meshPhysicalMaterial color={MANE_COLOR} />
-               </mesh>
-               <mesh position={[0, -1.0, 0]}>
-                 <coneGeometry args={[0.15, 0.2, 8]} />
-                 <meshPhysicalMaterial color={MANE_COLOR} />
-               </mesh>
-            </group>
-          )}
-          {type === 'bear' && (
-            <mesh position={[0, 0.2, -0.4]} rotation={[-0.4, 0, 0]}>
-               <sphereGeometry args={[0.15, 8, 8]} />
-               <meshPhysicalMaterial color={BODY_COLOR} />
-            </mesh>
-          )}
-        </group>
+                 <meshPhysicalMaterial color={BODY_COLOR} />
+              </mesh>
+            )}
+          </>
+        )}
       </group>
+    </group>
     </RigidBody>
   );
 }

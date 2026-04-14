@@ -13,6 +13,7 @@ import { Joystick } from './components/Joystick';
 import { AimJoystick } from './components/AimJoystick';
 import { Sword, RectangleVertical } from 'lucide-react';
 import { StoryScreen } from './components/StoryScreen';
+import { MiniMap } from './components/MiniMap';
 
 function Spawner() {
   const spawnEnemy = useStore((state) => state.spawnEnemy);
@@ -57,7 +58,7 @@ function Spawner() {
 
     let targetKills = 0;
     let maxAtOnce = 0;
-    let enemyType: 'wolf' | 'bear' | 'lion' = 'wolf';
+    let enemyType: 'wolf' | 'bear' | 'lion' | 'philistine_soldier' | 'philistine_archer' | 'philistine_heavy' | 'goliath' = 'wolf';
     let enemyHealth = 30;
 
     if (phase === 1) {
@@ -75,6 +76,26 @@ function Spawner() {
       maxAtOnce = 1;
       enemyType = 'lion';
       enemyHealth = 150;
+    } else if (phase === 4) {
+      targetKills = 15;
+      maxAtOnce = 5;
+      enemyType = 'philistine_soldier';
+      enemyHealth = 40;
+    } else if (phase === 5) {
+      targetKills = 10;
+      maxAtOnce = 4;
+      enemyType = 'philistine_archer';
+      enemyHealth = 35;
+    } else if (phase === 6) {
+      targetKills = 8;
+      maxAtOnce = 3;
+      enemyType = 'philistine_heavy';
+      enemyHealth = 100;
+    } else if (phase === 7) {
+      targetKills = 1;
+      maxAtOnce = 1;
+      enemyType = 'goliath';
+      enemyHealth = 500;
     } else {
       return;
     }
@@ -89,12 +110,24 @@ function Spawner() {
         setPhaseMessage("Parabéns, você venceu os ursos! Prepare-se para enfrentar o poderoso Leão.");
         state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
       } else if (phase === 3) {
-        setPhaseMessage("VITÓRIA! O LEÃO FOI DERROTADO!");
+        setPhaseMessage("O LEÃO FOI DERROTADO! Mas a guerra começou... Filisteus atacam!");
+        state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
+      } else if (phase === 4) {
+        setPhaseMessage("Soldados derrotados! Arqueiros inimigos se aproximam!");
+        state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
+      } else if (phase === 5) {
+        setPhaseMessage("Arqueiros vencidos! Cuidado com a infantaria pesada!");
+        state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
+      } else if (phase === 6) {
+        setPhaseMessage("A elite caiu! Agora... O GIGANTE GOLIAS APARECE!");
+        state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
+      } else if (phase === 7) {
+        setPhaseMessage("VITÓRIA ÉPICA! GOLIAS FOI DERROTADO!");
         state.transitionTimeout = setTimeout(() => {
           document.exitPointerLock();
-          useStore.getState().setStoryScreen(9);
+          useStore.getState().setStoryScreen(9); // Or a new victory screen
           useStore.getState().setPhaseMessage(null);
-        }, 3000);
+        }, 5000);
       }
       return;
     }
@@ -126,7 +159,7 @@ function Spawner() {
 }
 
 function UI() {
-  const { health, score, isPaused, reset, retryPhase, togglePause, enemies, phase, phaseMessage, isWalkingHome, volume, setVolume } = useStore();
+  const { health, score, isPaused, reset, retryPhase, togglePause, enemies, phase, phaseMessage, isWalkingHome, volume, setVolume, faith, coins, isExtraGame, weapon } = useStore();
 
   useEffect(() => {
     if (health <= 0) {
@@ -211,6 +244,7 @@ function UI() {
 
   return (
     <div className="absolute inset-0 pointer-events-none select-none">
+      <MiniMap />
       {/* Crosshair - Improved */}
       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-80">
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -254,6 +288,22 @@ function UI() {
                 <div className="text-blue-400 font-mono text-lg font-bold drop-shadow-md pl-1">
                     FASE: {phase}
                 </div>
+                {isExtraGame && (
+                  <>
+                    <div className="text-yellow-500 font-mono text-lg font-bold drop-shadow-md pl-1">
+                        MOEDAS: {coins}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                        <div className="w-32 h-3 bg-gray-900/80 border border-blue-500/30 rounded-full overflow-hidden">
+                            <div 
+                                className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-300" 
+                                style={{ width: `${faith}%` }}
+                            />
+                        </div>
+                        <span className="text-blue-400 font-bold text-xs">FÉ: {Math.floor(faith)}%</span>
+                    </div>
+                  </>
+                )}
             </div>
         </div>
       </div>
@@ -301,35 +351,22 @@ function UI() {
       </div>
 
       {/* Bottom Right: Actions (Jump, Weapons) */}
-      <div className="absolute bottom-12 right-12 flex gap-6 pointer-events-auto">
-        {/* Column 1: Block above Stone */}
-        <div className="flex flex-col gap-6 items-center justify-end">
-             {/* Block Button */}
+      <div className="absolute bottom-12 right-12 pointer-events-auto">
+        {!isExtraGame ? (
+          <div className="grid grid-cols-2 gap-4 place-items-center">
+            {/* Top Left: Stone (Square) */}
+            <div className={`relative rounded-xl transition-all ${weapon === 'sling' ? 'ring-4 ring-yellow-400 scale-110' : ''}`}>
+              <AimJoystick 
+                onAim={(x, y) => window.dispatchEvent(new CustomEvent('aimJoystickMove', { detail: { x, y } }))}
+                onAttack={() => triggerAttack('sling')}
+                icon={<RectangleVertical size={24} strokeWidth={2.5} />}
+                label="PEDRA"
+                colorClass="bg-yellow-900/40 border-yellow-500 text-yellow-500 shadow-[0_0_15px_rgba(250,204,21,0.3)]"
+              />
+            </div>
+            {/* Top Right: Jump (Round) */}
             <button 
-                className="w-16 h-16 bg-green-900/60 border-2 border-green-500 rounded-full active:bg-green-700/80 backdrop-blur-md flex items-center justify-center text-white font-bold text-[10px] hover:bg-green-800/60 transition-all shadow-lg shadow-green-900/30"
-                onPointerDown={() => window.dispatchEvent(new Event('blockStart'))}
-                onPointerUp={() => window.dispatchEvent(new Event('blockEnd'))}
-                onPointerLeave={() => window.dispatchEvent(new Event('blockEnd'))}
-                onPointerCancel={() => window.dispatchEvent(new Event('blockEnd'))}
-            >
-                DEFESA
-            </button>
-            
-            {/* Stone Weapon */}
-            <AimJoystick 
-              onAim={(x, y) => window.dispatchEvent(new CustomEvent('aimJoystickMove', { detail: { x, y } }))}
-              onAttack={() => triggerAttack('sling')}
-              icon={<RectangleVertical size={28} strokeWidth={2.5} />}
-              label="PEDRA"
-              colorClass="bg-yellow-900/40 border-yellow-500 text-yellow-500 shadow-[0_0_15px_rgba(250,204,21,0.3)]"
-            />
-        </div>
-
-        {/* Column 2: Jump above Knife */}
-        <div className="flex flex-col gap-6 items-center justify-end">
-            {/* Jump Button */}
-            <button 
-                className="w-20 h-20 bg-gray-800/60 border-2 border-gray-500 rounded-full active:bg-gray-700/80 backdrop-blur-md flex items-center justify-center text-white font-bold text-sm hover:bg-gray-700/60 transition-all shadow-lg"
+                className="w-16 h-16 bg-gray-800/60 border-2 border-gray-500 rounded-full active:bg-gray-700/80 backdrop-blur-md flex flex-col items-center justify-center text-white font-bold text-[10px] hover:bg-gray-700/60 transition-all shadow-lg"
                 onPointerDown={() => sendKey('Space', true)}
                 onPointerUp={() => sendKey('Space', false)}
                 onPointerLeave={() => sendKey('Space', false)}
@@ -337,16 +374,75 @@ function UI() {
             >
                 PULAR
             </button>
+            
+            {/* Bottom Left: Defense (Round) */}
+            <button 
+                className="w-16 h-16 bg-green-900/60 border-2 border-green-500 rounded-full active:bg-green-700/80 backdrop-blur-md flex flex-col items-center justify-center text-white font-bold text-[10px] hover:bg-green-800/60 transition-all shadow-lg shadow-green-900/30"
+                onPointerDown={() => window.dispatchEvent(new Event('blockStart'))}
+                onPointerUp={() => window.dispatchEvent(new Event('blockEnd'))}
+                onPointerLeave={() => window.dispatchEvent(new Event('blockEnd'))}
+                onPointerCancel={() => window.dispatchEvent(new Event('blockEnd'))}
+            >
+                DEFESA
+            </button>
+            {/* Bottom Right: Knife (Square) */}
+            <div className={`relative rounded-xl transition-all ${weapon === 'knife' ? 'ring-4 ring-white scale-110' : ''}`}>
+              <AimJoystick 
+                onAim={(x, y) => window.dispatchEvent(new CustomEvent('aimJoystickMove', { detail: { x, y } }))}
+                onAttack={() => triggerAttack('knife')}
+                icon={<Sword size={24} strokeWidth={2.5} />}
+                label="FACA"
+                colorClass="bg-gray-100/20 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.3)]"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 place-items-center">
+            {/* Top Left: Special Ability (Faith) */}
+            <button 
+                className={`w-16 h-16 rounded-full border-2 flex flex-col items-center justify-center transition-all shadow-lg ${faith >= 20 ? 'bg-blue-600/60 border-blue-400 animate-pulse' : 'bg-gray-800/60 border-gray-600 opacity-50'}`}
+                onClick={() => {
+                  if (faith >= 20) {
+                    window.dispatchEvent(new Event('faithDivine'));
+                  }
+                }}
+            >
+                <span className="text-white font-bold text-[10px]">FÉ</span>
+                <span className="text-white font-bold text-[8px]">DIVINA</span>
+            </button>
 
-            {/* Knife Weapon */}
+            {/* Top Right: Sword */}
             <AimJoystick 
               onAim={(x, y) => window.dispatchEvent(new CustomEvent('aimJoystickMove', { detail: { x, y } }))}
               onAttack={() => triggerAttack('knife')}
-              icon={<Sword size={28} strokeWidth={2.5} />}
-              label="FACA"
+              icon={<Sword size={24} strokeWidth={2.5} />}
+              label="ESPADA"
               colorClass="bg-gray-100/20 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.3)]"
             />
-        </div>
+
+            {/* Bottom Left: Defense Button */}
+            <button 
+                className="w-16 h-16 bg-green-900/60 border-2 border-green-500 rounded-full active:bg-green-700/80 backdrop-blur-md flex flex-col items-center justify-center text-white font-bold text-[10px] hover:bg-green-800/60 transition-all shadow-lg shadow-green-900/30"
+                onPointerDown={() => window.dispatchEvent(new Event('blockStart'))}
+                onPointerUp={() => window.dispatchEvent(new Event('blockEnd'))}
+                onPointerLeave={() => window.dispatchEvent(new Event('blockEnd'))}
+                onPointerCancel={() => window.dispatchEvent(new Event('blockEnd'))}
+            >
+                DEFESA
+            </button>
+
+            {/* Bottom Right: Jump Button */}
+            <button 
+                className="w-16 h-16 bg-gray-800/60 border-2 border-gray-500 rounded-full active:bg-gray-700/80 backdrop-blur-md flex flex-col items-center justify-center text-white font-bold text-[10px] hover:bg-gray-700/60 transition-all shadow-lg"
+                onPointerDown={() => sendKey('Space', true)}
+                onPointerUp={() => sendKey('Space', false)}
+                onPointerLeave={() => sendKey('Space', false)}
+                onPointerCancel={() => sendKey('Space', false)}
+            >
+                PULAR
+            </button>
+          </div>
+        )}
       </div>
       
       {/* Instructions */}
@@ -593,12 +689,16 @@ function TargetManager() {
     aliveEnemies.forEach(enemy => {
       const rb = enemyRefs.get(enemy.id);
       if (!rb) return;
-      const ePos = rb.translation();
-      const eVec = new THREE.Vector3(ePos.x, ePos.y, ePos.z);
-      const dist = pVec.distanceTo(eVec);
-      if (dist < minDistance) {
-        minDistance = dist;
-        closestEnemy = enemy;
+      try {
+        const ePos = rb.translation();
+        const eVec = new THREE.Vector3(ePos.x, ePos.y, ePos.z);
+        const dist = pVec.distanceTo(eVec);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestEnemy = enemy;
+        }
+      } catch (e) {
+        // Ignore invalid rigid bodies
       }
     });
 
@@ -628,27 +728,32 @@ function TargetIndicator() {
     if (targetId) {
       const rb = enemyRefs.get(targetId);
       if (rb) {
-        const pos = rb.translation();
-        const targetPos = new THREE.Vector3(pos.x, pos.y + 2.0, pos.z);
-        
-        // Smoothly interpolate position
-        if (!wasVisible.current) {
-            // Snap to position if it was hidden
-            groupRef.current.position.copy(targetPos);
-        } else {
-            // Smoothly interpolate position if it was already visible
-            groupRef.current.position.lerp(targetPos, 1 - Math.exp(-15 * delta));
+        try {
+          const pos = rb.translation();
+          const targetPos = new THREE.Vector3(pos.x, pos.y + 2.0, pos.z);
+          
+          // Smoothly interpolate position
+          if (!wasVisible.current) {
+              // Snap to position if it was hidden
+              groupRef.current.position.copy(targetPos);
+          } else {
+              // Smoothly interpolate position if it was already visible
+              groupRef.current.position.lerp(targetPos, 1 - Math.exp(-15 * delta));
+          }
+          
+          // Face the camera
+          groupRef.current.quaternion.copy(state.camera.quaternion);
+          
+          // Add a slow spin around the Z axis (facing the camera)
+          groupRef.current.rotateZ(state.clock.elapsedTime * 2);
+          
+          // Make it visible
+          groupRef.current.visible = true;
+          wasVisible.current = true;
+        } catch (e) {
+          groupRef.current.visible = false;
+          wasVisible.current = false;
         }
-        
-        // Face the camera
-        groupRef.current.quaternion.copy(state.camera.quaternion);
-        
-        // Add a slow spin around the Z axis (facing the camera)
-        groupRef.current.rotateZ(state.clock.elapsedTime * 2);
-        
-        // Make it visible
-        groupRef.current.visible = true;
-        wasVisible.current = true;
       } else {
         groupRef.current.visible = false;
         wasVisible.current = false;

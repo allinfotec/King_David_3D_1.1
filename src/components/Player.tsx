@@ -18,9 +18,13 @@ export function Player() {
   const { camera, scene } = useThree();
   const { rapier, world } = useRapier();
   const [lastShot, setLastShot] = useState(0);
-  const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health, retryCount, isAnointing, volume } = useStore();
+  const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health, retryCount, isAnointing, volume, isMounted, faith, useFaith, addFaith, weapon, setWeapon } = useStore();
   const playerMesh = useRef<THREE.Group>(null);
-  const [weapon, setWeapon] = useState<'sling' | 'knife'>('sling');
+  const horseRef = useRef<THREE.Group>(null);
+  const [lastFaithTime, setLastFaithTime] = useState(0);
+
+  const PLAYER_SPEED = isMounted ? SPEED * 1.8 : SPEED;
+  const PLAYER_JUMP = isMounted ? JUMP_FORCE * 1.2 : JUMP_FORCE;
   const [isAttacking, setIsAttacking] = useState(false);
   const [trajectoryPoints, setTrajectoryPoints] = useState<THREE.Vector3[]>([]);
   
@@ -106,6 +110,18 @@ export function Player() {
       }
   };
 
+  // Weapon switch sound effect
+  useEffect(() => {
+    const audioUrl = weapon === 'sling' 
+      ? 'https://assets.mixkit.co/active_storage/sfx/204/204-preview.mp3' // Swoosh/leather sound
+      : 'https://assets.mixkit.co/active_storage/sfx/2952/2952-preview.mp3'; // Knife unsheath sound
+    
+    const audio = new Audio(audioUrl);
+    audio.volume = 0.4 * volume;
+    audio.playbackRate = weapon === 'sling' ? 1.5 : 1.0;
+    audio.play().catch(() => {});
+  }, [weapon, volume]);
+
   // Input handlers
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -123,6 +139,12 @@ export function Player() {
             keys.current.jump = true; 
             break;
         case 'ShiftLeft': keys.current.dash = true; break;
+        case 'KeyF': 
+            if (faith >= 20) {
+                useFaith(20);
+                window.dispatchEvent(new Event('faithDivine'));
+            }
+            break;
         case 'Digit1': setWeapon('sling'); break;
         case 'Digit2': setWeapon('knife'); break;
       }
@@ -187,6 +209,21 @@ export function Player() {
 
     const handleBlockStart = () => { keys.current.block = true; };
     const handleBlockEnd = () => { keys.current.block = false; };
+    
+    const handleFaithDivine = () => {
+        const now = Date.now();
+        if (now - lastFaithTime < 5000) return;
+        setLastFaithTime(now);
+        
+        // Healing and power up effect
+        useStore.getState().addEffect([playerRef.current?.translation().x || 0, (playerRef.current?.translation().y || 0) + 1, playerRef.current?.translation().z || 0], 'flash');
+        
+        // Play epic sound
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2042/2042-preview.mp3');
+        audio.volume = 0.8 * useStore.getState().volume;
+        audio.playbackRate = 0.5;
+        audio.play().catch(() => {});
+    };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
@@ -196,6 +233,7 @@ export function Player() {
     window.addEventListener('blockStart', handleBlockStart);
     window.addEventListener('blockEnd', handleBlockEnd);
     window.addEventListener('weaponSelect', handleWeaponSelect as EventListener);
+    window.addEventListener('faithDivine', handleFaithDivine);
     
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
@@ -206,6 +244,7 @@ export function Player() {
       window.removeEventListener('blockStart', handleBlockStart);
       window.removeEventListener('blockEnd', handleBlockEnd);
       window.removeEventListener('weaponSelect', handleWeaponSelect as EventListener);
+      window.removeEventListener('faithDivine', handleFaithDivine);
     };
   }, []); // Empty dependency array for stable input handling
 
@@ -280,9 +319,13 @@ export function Player() {
               if (targetEnemy) {
                   const rb = enemyRefs.get(targetId);
                   if (rb) {
-                      const ePos = rb.translation();
-                      // Aim at the target enemy's center
-                      targetPoint = new THREE.Vector3(ePos.x, ePos.y + 0.5, ePos.z);
+                      try {
+                          const ePos = rb.translation();
+                          // Aim at the target enemy's center
+                          targetPoint = new THREE.Vector3(ePos.x, ePos.y + 0.5, ePos.z);
+                      } catch (e) {
+                          targetPoint = new THREE.Vector3(targetEnemy.position[0], targetEnemy.position[1] + 0.5, targetEnemy.position[2]);
+                      }
                   } else {
                       targetPoint = new THREE.Vector3(targetEnemy.position[0], targetEnemy.position[1] + 0.5, targetEnemy.position[2]);
                   }
@@ -332,8 +375,12 @@ export function Player() {
           const rb = enemyRefs.get(enemy.id);
           let enemyVec;
           if (rb) {
-              const ePos = rb.translation();
-              enemyVec = new THREE.Vector3(ePos.x, ePos.y, ePos.z);
+              try {
+                  const ePos = rb.translation();
+                  enemyVec = new THREE.Vector3(ePos.x, ePos.y, ePos.z);
+              } catch (e) {
+                  enemyVec = new THREE.Vector3(enemy.position[0], enemy.position[1], enemy.position[2]);
+              }
           } else {
               enemyVec = new THREE.Vector3(enemy.position[0], enemy.position[1], enemy.position[2]);
           }
@@ -586,7 +633,7 @@ export function Player() {
         playerMesh.current.rotation.y += rotDiff * (1 - Math.exp(-10 * delta));
     }
 
-    const currentSpeed = keys.current.block ? SPEED * 0.4 : SPEED;
+    const currentSpeed = keys.current.block ? PLAYER_SPEED * 0.4 : PLAYER_SPEED;
 
     if (direction.length() > 0) {
       direction.normalize().multiplyScalar(currentSpeed);
@@ -810,11 +857,11 @@ export function Player() {
         if (timeSinceGrounded < 150 && jumpCount.current === 0) { // 150ms coyote time
             jumpCount.current = 1;
             lastJumpPressedTime.current = 0; // Consume jump
-            performJump(JUMP_FORCE);
+            performJump(PLAYER_JUMP);
         } else if (jumpCount.current === 1 && !isGrounded) {
             jumpCount.current = 2;
             lastJumpPressedTime.current = 0; // Consume jump
-            performJump(JUMP_FORCE); // Double jump higher
+            performJump(PLAYER_JUMP); // Double jump higher
             
             // Double jump effect
             const pos = playerRef.current.translation();
@@ -832,7 +879,11 @@ export function Player() {
 
     // Camera Follow Logic
     const playerPos = playerRef.current.translation();
-    const cameraTargetPos = new THREE.Vector3(playerPos.x, playerPos.y + 2.5, playerPos.z); // Height offset
+    const isExtraGame = useStore.getState().isExtraGame;
+    const cameraHeight = isExtraGame ? 5.5 : 3.5;
+    const cameraDistance = isExtraGame ? 8 : 5;
+    
+    const cameraTargetPos = new THREE.Vector3(playerPos.x, playerPos.y + cameraHeight, playerPos.z); 
 
     // Calculate direction from camera to player (horizontal only for consistent distance)
     const camDir = new THREE.Vector3();
@@ -844,11 +895,10 @@ export function Player() {
       camDir.set(0, 0, 1);
     }
 
-    const CAMERA_DISTANCE = 5;
-    cameraTargetPos.sub(camDir.multiplyScalar(CAMERA_DISTANCE));
+    cameraTargetPos.sub(camDir.multiplyScalar(cameraDistance));
 
     // Smoothly move camera
-    camera.position.lerp(cameraTargetPos, 1 - Math.exp(-15 * delta)); // Frame-independent lerp
+    camera.position.lerp(cameraTargetPos, 1 - Math.exp(-15 * delta)); 
 
     // Animation Logic
     const time = state.clock.getElapsedTime();
@@ -867,22 +917,26 @@ export function Player() {
             // Arms - Opposite to legs
             if (!keys.current.block) {
                 leftArm.current.rotation.x = Math.sin(time * freq + Math.PI) * amp;
-                leftArm.current.rotation.z = 0.15; // More outward angle
+                leftArm.current.rotation.z = 0.15 + Math.abs(Math.sin(time * freq)) * 0.1; // Dynamic outward angle
             }
             
-            // Body Bobbing - More noticeable
-            playerMesh.current.position.y = -0.8 + Math.abs(Math.sin(time * freq)) * 0.08;
+            // Body Bobbing and Swaying
+            playerMesh.current.position.y = -0.8 + Math.abs(Math.sin(time * freq)) * 0.1;
+            playerMesh.current.rotation.z = Math.sin(time * freq * 0.5) * 0.05; // Slight side-to-side sway
+            playerMesh.current.rotation.x = 0.1; // Slight lean forward when walking
             
             // Right arm follows walk cycle unless attacking or blocking
             if (!isAttacking && !keys.current.block) {
                 rightArm.current.rotation.x = Math.sin(time * freq) * amp;
-                rightArm.current.rotation.z = -0.15; // More outward angle
+                rightArm.current.rotation.z = -0.15 - Math.abs(Math.sin(time * freq + Math.PI)) * 0.1; // Dynamic outward angle
             }
         } else {
             // Idle - Breathing
             const breathe = Math.sin(time * 2) * 0.02;
             const lerpFactor = 1 - Math.exp(-10 * delta);
             playerMesh.current.position.y = THREE.MathUtils.lerp(playerMesh.current.position.y, -0.8 + breathe, lerpFactor);
+            playerMesh.current.rotation.z = THREE.MathUtils.lerp(playerMesh.current.rotation.z, 0, lerpFactor);
+            playerMesh.current.rotation.x = THREE.MathUtils.lerp(playerMesh.current.rotation.x, 0, lerpFactor);
 
             leftLeg.current.rotation.x = THREE.MathUtils.lerp(leftLeg.current.rotation.x, 0, lerpFactor);
             rightLeg.current.rotation.x = THREE.MathUtils.lerp(rightLeg.current.rotation.x, 0, lerpFactor);
@@ -939,22 +993,23 @@ export function Player() {
                     }
                 }
             } else {
-                // Knife stab
+                // Sword/Knife slash
                 const attackTime = (Date.now() - lastShot) / 400;
                 if (attackTime < 0.2) {
-                    // Wind up slightly
-                    rightArm.current.rotation.x = THREE.MathUtils.lerp(0, Math.PI * 0.2, attackTime * 5);
-                    rightArm.current.rotation.z = THREE.MathUtils.lerp(0, 0.2, attackTime * 5);
+                    // Wind up: arm goes up and back
+                    const windUpProgress = attackTime * 5; // 0 to 1
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(0, Math.PI * 0.8, windUpProgress);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(0, 0.5, windUpProgress);
                 } else if (attackTime < 0.4) {
-                    // Quick stab out
-                    const stabProgress = (attackTime - 0.2) * 5;
-                    rightArm.current.rotation.x = THREE.MathUtils.lerp(Math.PI * 0.2, -Math.PI * 0.6, stabProgress);
-                    rightArm.current.rotation.z = THREE.MathUtils.lerp(0.2, -0.2, stabProgress);
+                    // Slash down and across
+                    const slashProgress = (attackTime - 0.2) * 5; // 0 to 1
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(Math.PI * 0.8, -Math.PI * 0.4, slashProgress);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(0.5, -0.8, slashProgress);
                 } else {
-                    // Recoil and return
+                    // Recovery
                     const returnProgress = Math.min(1, (attackTime - 0.4) / 0.6);
-                    rightArm.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.6, 0, returnProgress);
-                    rightArm.current.rotation.z = THREE.MathUtils.lerp(-0.2, 0, returnProgress);
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.4, 0, returnProgress);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(-0.8, 0, returnProgress);
                 }
             }
         }
@@ -975,8 +1030,12 @@ export function Player() {
       if (targetEnemy) {
           const rb = enemyRefs.get(targetId);
           if (rb) {
-              const ePos = rb.translation();
-              targetPoint = new THREE.Vector3(ePos.x, ePos.y + 0.5, ePos.z);
+              try {
+                  const ePos = rb.translation();
+                  targetPoint = new THREE.Vector3(ePos.x, ePos.y + 0.5, ePos.z);
+              } catch (e) {
+                  targetPoint = new THREE.Vector3(targetEnemy.position[0], targetEnemy.position[1] + 0.5, targetEnemy.position[2]);
+              }
           } else {
               targetPoint = new THREE.Vector3(targetEnemy.position[0], targetEnemy.position[1] + 0.5, targetEnemy.position[2]);
           }
@@ -1048,7 +1107,7 @@ export function Player() {
       <CapsuleCollider args={[0.75, 0.5]} friction={0} />
       
       {/* Visible Player Model - Young David - High Res */}
-      <group ref={playerMesh} position={[0, -0.8, 0]}>
+      <group ref={playerMesh} position={[0, isMounted ? 0.2 : -0.8, 0]}>
         {isAnointing && (
           <group position={[0, 10, 0]}>
             <spotLight 
@@ -1064,36 +1123,140 @@ export function Player() {
           </group>
         )}
         <group ref={rollGroup}>
-          {/* Tunic (Body) - Better shape */}
-          <mesh castShadow position={[0, 0.6, 0]}>
-          <cylinderGeometry args={[0.26, 0.45, 1.2, 32]} /> {/* Increased segments, wider base */}
-          <meshPhysicalMaterial color="#e3dac9" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.4} />
-        </mesh>
-        
-        {/* Tunic Folds (Details) */}
-        <mesh position={[0, 0.6, 0.28]} rotation={[0, 0, 0]}>
-            <cylinderGeometry args={[0.02, 0.05, 1.1, 8]} />
-            <meshPhysicalMaterial color="#d4cbb8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
-        </mesh>
-        <mesh position={[0.15, 0.6, 0.25]} rotation={[0, 0, 0.1]}>
-            <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
-            <meshPhysicalMaterial color="#d4cbb8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
-        </mesh>
-        <mesh position={[-0.15, 0.6, 0.25]} rotation={[0, 0, -0.1]}>
-            <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
-            <meshPhysicalMaterial color="#d4cbb8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
-        </mesh>
+          {/* Horse Model (Only if mounted) */}
+          {isMounted && (
+            <group ref={horseRef} position={[0, -0.8, 0]}>
+              {/* Horse Body */}
+              <mesh castShadow position={[0, 0.4, 0]}>
+                <capsuleGeometry args={[0.4, 1.2, 8, 8]} />
+                <meshPhysicalMaterial color="#4E342E" roughness={0.8} />
+              </mesh>
+              {/* Horse Neck */}
+              <mesh castShadow position={[0, 0.8, 0.6]} rotation={[-0.5, 0, 0]}>
+                <cylinderGeometry args={[0.2, 0.25, 0.8, 8]} />
+                <meshPhysicalMaterial color="#4E342E" roughness={0.8} />
+              </mesh>
+              {/* Horse Head */}
+              <mesh castShadow position={[0, 1.2, 0.9]} rotation={[-0.2, 0, 0]}>
+                <capsuleGeometry args={[0.18, 0.4, 8, 8]} />
+                <meshPhysicalMaterial color="#4E342E" roughness={0.8} />
+              </mesh>
+              {/* Horse Legs */}
+              <group position={[0.3, 0, 0.4]}>
+                <mesh castShadow position={[0, 0, 0]}>
+                  <cylinderGeometry args={[0.1, 0.08, 0.8, 8]} />
+                  <meshPhysicalMaterial color="#3E2723" />
+                </mesh>
+              </group>
+              <group position={[-0.3, 0, 0.4]}>
+                <mesh castShadow position={[0, 0, 0]}>
+                  <cylinderGeometry args={[0.1, 0.08, 0.8, 8]} />
+                  <meshPhysicalMaterial color="#3E2723" />
+                </mesh>
+              </group>
+              <group position={[0.3, 0, -0.4]}>
+                <mesh castShadow position={[0, 0, 0]}>
+                  <cylinderGeometry args={[0.1, 0.08, 0.8, 8]} />
+                  <meshPhysicalMaterial color="#3E2723" />
+                </mesh>
+              </group>
+              <group position={[-0.3, 0, -0.4]}>
+                <mesh castShadow position={[0, 0, 0]}>
+                  <cylinderGeometry args={[0.1, 0.08, 0.8, 8]} />
+                  <meshPhysicalMaterial color="#3E2723" />
+                </mesh>
+              </group>
+              {/* Tail */}
+              <mesh position={[0, 0.6, -0.8]} rotation={[0.5, 0, 0]}>
+                 <capsuleGeometry args={[0.05, 0.6, 8, 8]} />
+                 <meshPhysicalMaterial color="#212121" />
+              </mesh>
+            </group>
+          )}
+          {/* Tunic (Body) */}
+          {useStore.getState().isExtraGame ? (
+            <>
+              {/* Warrior Outfit */}
+              <mesh castShadow position={[0, 0.6, 0]}>
+                <cylinderGeometry args={[0.26, 0.45, 1.2, 32]} />
+                <meshPhysicalMaterial color="#1a237e" roughness={0.8} clearcoat={0.1} clearcoatRoughness={0.4} /> {/* Deep Blue Tunic */}
+              </mesh>
+              
+              {/* Breastplate / Armor */}
+              <mesh castShadow position={[0, 0.85, 0]} scale={[1.1, 1, 1.1]}>
+                <cylinderGeometry args={[0.28, 0.3, 0.6, 32]} />
+                <meshPhysicalMaterial color="#cfd8dc" metalness={0.8} roughness={0.2} clearcoat={1} />
+              </mesh>
+              
+              {/* Shoulder Guards (Pauldrons) */}
+              <mesh position={[0.35, 1.25, 0]} rotation={[0, 0, -0.2]}>
+                <sphereGeometry args={[0.18, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshPhysicalMaterial color="#cfd8dc" metalness={0.8} roughness={0.2} />
+              </mesh>
+              <mesh position={[-0.35, 1.25, 0]} rotation={[0, 0, 0.2]}>
+                <sphereGeometry args={[0.18, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+                <meshPhysicalMaterial color="#cfd8dc" metalness={0.8} roughness={0.2} />
+              </mesh>
+            
+              {/* Tunic Folds (Details) */}
+              <mesh position={[0, 0.6, 0.28]} rotation={[0, 0, 0]}>
+                  <cylinderGeometry args={[0.02, 0.05, 1.1, 8]} />
+                  <meshPhysicalMaterial color="#0d47a1" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
+              </mesh>
+              <mesh position={[0.15, 0.6, 0.25]} rotation={[0, 0, 0.1]}>
+                  <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
+                  <meshPhysicalMaterial color="#0d47a1" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
+              </mesh>
+              <mesh position={[-0.15, 0.6, 0.25]} rotation={[0, 0, -0.1]}>
+                  <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
+                  <meshPhysicalMaterial color="#0d47a1" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
+              </mesh>
 
-        {/* Scarf / Shawl */}
-        <mesh position={[0, 1.15, 0]} rotation={[0.1, 0, 0]}>
-             <torusGeometry args={[0.3, 0.08, 16, 32]} />
-             <meshPhysicalMaterial color="#8D6E63" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.6} />
-        </mesh>
-        {/* Scarf tail */}
-        <mesh position={[0.2, 0.9, -0.25]} rotation={[-0.5, 0, -0.2]}>
-             <capsuleGeometry args={[0.06, 0.4, 8, 16]} />
-             <meshPhysicalMaterial color="#8D6E63" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.6} />
-        </mesh>
+              {/* Scarf / Shawl - Warrior Red */}
+              <mesh position={[0, 1.15, 0]} rotation={[0.1, 0, 0]}>
+                   <torusGeometry args={[0.3, 0.08, 16, 32]} />
+                   <meshPhysicalMaterial color="#b71c1c" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.6} />
+              </mesh>
+              {/* Scarf tail */}
+              <mesh position={[0.2, 0.9, -0.25]} rotation={[-0.5, 0, -0.2]}>
+                   <capsuleGeometry args={[0.06, 0.4, 8, 16]} />
+                   <meshPhysicalMaterial color="#b71c1c" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.6} />
+              </mesh>
+            </>
+          ) : (
+            <>
+              {/* Shepherd Outfit */}
+              <mesh castShadow position={[0, 0.6, 0]}>
+                <cylinderGeometry args={[0.26, 0.45, 1.2, 32]} />
+                <meshPhysicalMaterial color="#e0d8c8" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} /> {/* Off-white Tunic */}
+              </mesh>
+              
+              {/* Tunic Folds (Details) */}
+              <mesh position={[0, 0.6, 0.28]} rotation={[0, 0, 0]}>
+                  <cylinderGeometry args={[0.02, 0.05, 1.1, 8]} />
+                  <meshPhysicalMaterial color="#d0c8b8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
+              </mesh>
+              <mesh position={[0.15, 0.6, 0.25]} rotation={[0, 0, 0.1]}>
+                  <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
+                  <meshPhysicalMaterial color="#d0c8b8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
+              </mesh>
+              <mesh position={[-0.15, 0.6, 0.25]} rotation={[0, 0, -0.1]}>
+                  <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
+                  <meshPhysicalMaterial color="#d0c8b8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
+              </mesh>
+
+              {/* Scarf / Shawl - Shepherd Brown */}
+              <mesh position={[0, 1.15, 0]} rotation={[0.1, 0, 0]}>
+                   <torusGeometry args={[0.3, 0.08, 16, 32]} />
+                   <meshPhysicalMaterial color="#8b4513" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
+              </mesh>
+              {/* Scarf tail */}
+              <mesh position={[0.2, 0.9, -0.25]} rotation={[-0.5, 0, -0.2]}>
+                   <capsuleGeometry args={[0.06, 0.4, 8, 16]} />
+                   <meshPhysicalMaterial color="#8b4513" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
+              </mesh>
+            </>
+          )}
 
         {/* Bag Strap */}
         <mesh position={[0, 0.7, 0]} rotation={[0, 0, -0.8]} scale={[1, 1, 1.2]}>
@@ -1260,10 +1423,17 @@ export function Player() {
         {/* Arms - Pivot at shoulder */}
         <group ref={leftArm} position={[-0.35, 1.3, 0]}>
             {/* Sleeve */}
-            <mesh castShadow position={[0, -0.15, 0]}>
-                <cylinderGeometry args={[0.1, 0.09, 0.3, 16]} />
-                <meshPhysicalMaterial color="#e3dac9" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.4} />
-            </mesh>
+            {useStore.getState().isExtraGame ? (
+              <mesh castShadow position={[0, -0.15, 0]}>
+                  <cylinderGeometry args={[0.1, 0.09, 0.3, 16]} />
+                  <meshPhysicalMaterial color="#cfd8dc" metalness={0.6} roughness={0.3} />
+              </mesh>
+            ) : (
+              <mesh castShadow position={[0, -0.15, 0]}>
+                  <cylinderGeometry args={[0.1, 0.09, 0.3, 16]} />
+                  <meshPhysicalMaterial color="#e0d8c8" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
+              </mesh>
+            )}
             {/* Arm */}
             <mesh castShadow position={[0, -0.35, 0]}>
                 <capsuleGeometry args={[0.07, 0.5, 16, 16]} />
@@ -1274,14 +1444,34 @@ export function Player() {
                 <sphereGeometry args={[0.08, 16, 16]} />
                 <meshPhysicalMaterial color="#ffcd94" clearcoat={0.1} clearcoatRoughness={0.3} transmission={0.1} thickness={0.5} />
             </mesh>
+            {/* Shield (Always in extra game) */}
+            {useStore.getState().isExtraGame && (
+              <group position={[-0.1, -0.5, 0.2]} rotation={[0, 0.5, 0]}>
+                <mesh castShadow rotation={[Math.PI/2, 0, 0]}>
+                  <cylinderGeometry args={[0.4, 0.4, 0.05, 32]} />
+                  <meshPhysicalMaterial color="#cfd8dc" metalness={0.8} roughness={0.2} />
+                </mesh>
+                <mesh position={[0, 0, 0.03]} rotation={[Math.PI/2, 0, 0]}>
+                  <torusGeometry args={[0.35, 0.02, 16, 32]} />
+                  <meshPhysicalMaterial color="#ffd700" metalness={0.9} roughness={0.1} />
+                </mesh>
+              </group>
+            )}
         </group>
         
         <group ref={rightArm} position={[0.35, 1.3, 0]}>
             {/* Sleeve */}
-            <mesh castShadow position={[0, -0.15, 0]}>
-                <cylinderGeometry args={[0.1, 0.09, 0.3, 16]} />
-                <meshPhysicalMaterial color="#e3dac9" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.4} />
-            </mesh>
+            {useStore.getState().isExtraGame ? (
+              <mesh castShadow position={[0, -0.15, 0]}>
+                  <cylinderGeometry args={[0.1, 0.09, 0.3, 16]} />
+                  <meshPhysicalMaterial color="#cfd8dc" metalness={0.6} roughness={0.3} />
+              </mesh>
+            ) : (
+              <mesh castShadow position={[0, -0.15, 0]}>
+                  <cylinderGeometry args={[0.1, 0.09, 0.3, 16]} />
+                  <meshPhysicalMaterial color="#e0d8c8" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
+              </mesh>
+            )}
             {/* Arm */}
             <mesh castShadow position={[0, -0.35, 0]}>
                 <capsuleGeometry args={[0.07, 0.5, 16, 16]} />

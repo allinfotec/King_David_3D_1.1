@@ -480,6 +480,34 @@ function Well({ position }: { position: [number, number, number] }) {
   );
 }
 
+function PotteryShard({ position, scale = 1, rotation }: { position: [number, number, number], scale?: number, rotation?: [number, number, number] }) {
+  const rot = rotation || [Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI];
+  return (
+    <RigidBody type="fixed" colliders="hull" position={position}>
+      <mesh castShadow receiveShadow scale={scale} rotation={rot}>
+        <cylinderGeometry args={[0.3, 0.2, 0.05, 8, 1, false, 0, Math.PI]} />
+        <meshPhysicalMaterial color="#bcaaa4" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
+      </mesh>
+    </RigidBody>
+  );
+}
+
+function DriedShrub({ position, scale = 1 }: { position: [number, number, number], scale?: number }) {
+  const rotation = useMemo(() => [0, Math.random() * Math.PI, 0] as [number, number, number], []);
+  return (
+    <group position={position} scale={scale} rotation={rotation}>
+      <mesh castShadow receiveShadow position={[0, 0.2, 0]}>
+        <dodecahedronGeometry args={[0.4, 0]} />
+        <meshPhysicalMaterial color="#8d6e63" roughness={1} wireframe={Math.random() > 0.5} />
+      </mesh>
+      <mesh castShadow receiveShadow position={[0.2, 0.1, 0.2]} scale={0.7}>
+        <dodecahedronGeometry args={[0.3, 0]} />
+        <meshPhysicalMaterial color="#795548" roughness={1} />
+      </mesh>
+    </group>
+  );
+}
+
 export function World() {
   // Load texture - Rocky/Sandy Ground - Darker
   const texture = useTexture('https://picsum.photos/seed/darkground/1024/1024');
@@ -590,11 +618,27 @@ export function World() {
 
       {/* New Biblical/Medieval Props */}
       <Well position={[15, -2, -15]} />
+      <Well position={[-30, -2, 25]} />
       <Pillar position={[20, -2, 10]} scale={1.2} />
       <Pillar position={[24, -2, 10]} scale={1.2} broken />
       <Pillar position={[22, -2, 14]} scale={1.2} />
       <Pillar position={[-20, -2, -20]} scale={0.8} broken />
       <Pillar position={[-22, -2, -18]} scale={0.8} />
+      
+      {/* Scattered Pottery Shards */}
+      <PotteryShard position={[16, -1.9, -14]} scale={1.5} />
+      <PotteryShard position={[14, -1.9, -16]} scale={1.2} />
+      <PotteryShard position={[-28, -1.9, 24]} scale={1.8} />
+      <PotteryShard position={[23, -1.9, 12]} scale={1.4} />
+      <PotteryShard position={[-21, -1.9, -19]} scale={1.3} />
+      
+      {/* Dried Shrubs */}
+      <DriedShrub position={[10, -2, -10]} scale={1.5} />
+      <DriedShrub position={[-15, -2, 15]} scale={2} />
+      <DriedShrub position={[25, -2, -5]} scale={1.2} />
+      <DriedShrub position={[-5, -2, -25]} scale={1.8} />
+      <DriedShrub position={[30, -2, 20]} scale={1.4} />
+      <DriedShrub position={[-25, -2, -10]} scale={1.6} />
 
       {/* End Game Passage */}
       <Passage />

@@ -107,7 +107,7 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
   return (
     <div 
       ref={containerRef}
-      className={`relative w-[80px] h-[80px] p-3 rounded-xl border-2 flex flex-col items-center justify-center transition-all backdrop-blur-md touch-none select-none ${colorClass}`}
+      className={`relative w-16 h-16 p-2 rounded-xl border-2 flex flex-col items-center justify-center transition-all backdrop-blur-md touch-none select-none ${colorClass}`}
       onPointerDown={handlePointerDown}
       onContextMenu={(e) => e.preventDefault()}
     >
