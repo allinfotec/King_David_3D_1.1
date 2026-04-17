@@ -60,6 +60,8 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   const lastRoarTime = useRef<number>(0);
   const ATTACK_COOLDOWN = type === 'bear' ? 3000 : type === 'lion' ? 1500 : 2000;
   const isAttacking = useRef(false);
+  const currentAttackType = useRef<'normal' | 'slam' | 'charge' | 'sweep'>('normal');
+  const attackHitApplied = useRef(false);
   const isHumanoid = type.startsWith('philistine') || type === 'goliath';
 
   // Stats based on type
@@ -80,7 +82,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   };
 
   const getScale = () => {
-    if (type === 'goliath') return 3.5;
+    if (type === 'goliath') return 4.0;
     if (type === 'philistine_heavy') return 1.2;
     if (type === 'philistine_archer') return 1.0;
     if (type === 'philistine_soldier') return 1.1;
@@ -108,11 +110,18 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   // Listen for player attacks to trigger dodges/blocks
   useEffect(() => {
     const handlePlayerAttack = (e: CustomEvent) => {
-        if (isDead || isStaggered || isAttacking.current || isDodgingEnemy || isBlocking) return;
+        if (isDeadRef.current || isStaggered || isAttacking.current || isDodgingEnemy || isBlocking) return;
         
         if (!rigidBody.current || !playerRef.current) return;
-        const enemyPos = rigidBody.current.translation();
-        const playerPos = playerRef.current.translation();
+        
+        let enemyPos, playerPos;
+        try {
+            enemyPos = rigidBody.current.translation();
+            playerPos = playerRef.current.translation();
+        } catch {
+            return;
+        }
+
         const dist = new THREE.Vector3(enemyPos.x, 0, enemyPos.z).distanceTo(new THREE.Vector3(playerPos.x, 0, playerPos.z));
         
         if (dist < 15) {
@@ -204,8 +213,13 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
         return;
     }
 
-    const enemyPos = rigidBody.current.translation();
-    const playerPos = playerRef.current.translation();
+    let enemyPos, playerPos;
+    try {
+        enemyPos = rigidBody.current.translation();
+        playerPos = playerRef.current.translation();
+    } catch {
+        return; // Physics engine unmounting
+    }
     const distToPlayer = new THREE.Vector3(enemyPos.x, 0, enemyPos.z).distanceTo(new THREE.Vector3(playerPos.x, 0, playerPos.z));
 
     // Line of Sight / Distance check
@@ -277,7 +291,10 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           let isAnotherAttacking = false;
           enemyRefs.forEach((ref, enemyId) => {
               if (enemyId !== id) {
-                  const otherPos = ref.translation();
+                  let otherPos;
+                  try {
+                      otherPos = ref.translation();
+                  } catch { return; }
                   const otherDist = new THREE.Vector3(otherPos.x, 0, otherPos.z).distanceTo(new THREE.Vector3(playerPos.x, 0, playerPos.z));
                   if (otherDist < 4) {
                       isAnotherAttacking = true;
@@ -309,30 +326,81 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           lastStateChange.current = now;
       }
       
-      // Attack Logic
-      if (distToPlayer < 3 && !isAttacking.current && now - lastAttackTime.current > (state === 'berserk' ? ATTACK_COOLDOWN * 0.5 : ATTACK_COOLDOWN)) {
+      // Attack Logic Start
+      let attackRange = isHumanoid ? 3.5 : 2.5;
+      if (type === 'goliath') attackRange = 5.5;
+
+      const cooldownMultiplier = state === 'berserk' ? 0.5 : 1;
+      
+      if (distToPlayer < attackRange && !isAttacking.current && now - lastAttackTime.current > (ATTACK_COOLDOWN * cooldownMultiplier)) {
           isAttacking.current = true;
           attackStartTime.current = Date.now();
+          attackHitApplied.current = false;
           
-          setTimeout(() => {
-              // Lunge / Attack
-              if (rigidBody.current && playerRef.current && !isDead) {
-                  // Lunge forward
-                  const currentPos = rigidBody.current.translation();
-                  const pPos = playerRef.current.translation();
+          if (type === 'goliath') {
+              const r = Math.random();
+              if (r < 0.35) currentAttackType.current = 'slam';
+              else if (r < 0.70) currentAttackType.current = 'charge';
+              else currentAttackType.current = 'sweep';
+          } else {
+              currentAttackType.current = 'normal';
+          }
+      }
+
+      // Attack Processing
+      if (isAttacking.current) {
+          const attackTime = Date.now() - attackStartTime.current;
+          let windupDuration = 400;
+          let totalDuration = 900;
+          
+          if (type === 'goliath') {
+              if (currentAttackType.current === 'slam') { windupDuration = 800; totalDuration = 1400; }
+              else if (currentAttackType.current === 'charge') { windupDuration = 600; totalDuration = 1200; }
+              else { windupDuration = 500; totalDuration = 1000; } // sweep
+          }
+
+          // Apply damage / impulse at the moment of strike
+          if (attackTime >= windupDuration && !attackHitApplied.current) {
+              attackHitApplied.current = true;
+              
+              if (rigidBody.current && playerRef.current && !isDeadRef.current) {
+                  let currentPos, pPos;
+                  try {
+                      currentPos = rigidBody.current.translation();
+                      pPos = playerRef.current.translation();
+                  } catch { return; }
+                  
                   const lungeDir = new THREE.Vector3(pPos.x - currentPos.x, 0, pPos.z - currentPos.z).normalize();
                   
+                  // Movement Impulses based on attack
                   if (type === 'lion') {
-                      rigidBody.current.applyImpulse({ x: lungeDir.x * 30, y: 5, z: lungeDir.z * 30 }, true); // Stronger, higher pounce
+                      rigidBody.current.applyImpulse({ x: lungeDir.x * 30, y: 5, z: lungeDir.z * 30 }, true);
+                  } else if (type === 'goliath') {
+                      if (currentAttackType.current === 'charge') {
+                          rigidBody.current.applyImpulse({ x: lungeDir.x * 80, y: 2, z: lungeDir.z * 80 }, true);
+                      } else if (currentAttackType.current === 'slam') {
+                          // Minimal forward momentum, massive downward hit
+                          rigidBody.current.applyImpulse({ x: lungeDir.x * 10, y: -10, z: lungeDir.z * 10 }, true);
+                          // Play heavy impact effect
+                          const slamRadius = 3;
+                          useStore.getState().addEffect([currentPos.x + lungeDir.x * 1.5, currentPos.y, currentPos.z + lungeDir.z * 1.5], 'impact');
+                      } else {
+                          // Sweep
+                          rigidBody.current.applyImpulse({ x: lungeDir.x * 20, y: 1, z: lungeDir.z * 20 }, true);
+                      }
                   } else {
                       rigidBody.current.applyImpulse({ x: lungeDir.x * 20, y: 2, z: lungeDir.z * 20 }, true);
                   }
 
-                  // Check Hit
+                  // Damage Calculation
                   const hitDist = new THREE.Vector3(currentPos.x, 0, currentPos.z).distanceTo(new THREE.Vector3(pPos.x, 0, pPos.z));
-                  if (hitDist < 3.5 && !useStore.getState().isDodging) {
+                  let effectiveRange = type === 'goliath' ? (currentAttackType.current === 'slam' ? 6.0 : 5.0) : 3.5;
+                  
+                  if (hitDist < effectiveRange && !useStore.getState().isDodging) {
                       const isPlayerBlocking = useStore.getState().isBlocking;
                       const isExtraGame = useStore.getState().isExtraGame;
+                      
+                      let finalDamage = ATTACK_DAMAGE;
                       
                       if (isPlayerBlocking) {
                           // Block sound
@@ -341,60 +409,54 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                           blockAudio.playbackRate = 0.5;
                           blockAudio.play().catch(() => {});
                           
-                          // Visual feedback for block
                           useStore.getState().addEffect([pPos.x, pPos.y + 1, pPos.z], 'flash');
                           
-                          // Counter-attack logic for extra phase
                           if (isExtraGame) {
-                              // David deals damage back to the enemy
                               damageEnemy(id, 25);
                               addEffect([currentPos.x, currentPos.y + 1, currentPos.z], 'impact');
-                              
-                              // Visual feedback for counter-attack
-                              if (group.current) {
-                                  group.current.position.z -= 0.5; // Push enemy back
-                              }
+                              window.dispatchEvent(new CustomEvent('attack', { detail: 'knife' }));
+                              if (group.current) group.current.position.z -= 0.5; 
                           }
                           
-                          // Reduced damage when blocking
-                          takeDamage(ATTACK_DAMAGE * 0.2);
+                          // Heavy attacks might break block or do more chip damage
+                          if (type === 'goliath' && currentAttackType.current === 'slam') {
+                              finalDamage *= 0.5; // Block helps less against giant slam
+                              // Optional: stagger player
+                          } else {
+                              finalDamage *= 0.2;
+                          }
+                          takeDamage(finalDamage);
                       } else {
-                          takeDamage(ATTACK_DAMAGE);
+                          takeDamage(finalDamage);
                       }
                       
-                      // Attack Sound
+                      // Attack Sound Effect
                       let audioUrl = 'https://assets.mixkit.co/active_storage/sfx/215/215-preview.mp3';
-                      if (type === 'bear') {
-                          audioUrl = 'https://assets.mixkit.co/active_storage/sfx/218/218-preview.mp3';
-                      } else if (type === 'lion') {
-                          audioUrl = 'https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3';
+                      if (type === 'bear') audioUrl = 'https://assets.mixkit.co/active_storage/sfx/218/218-preview.mp3';
+                      else if (type === 'lion') audioUrl = 'https://assets.mixkit.co/active_storage/sfx/214/214-preview.mp3';
+                      else if (type === 'goliath') {
+                          if (currentAttackType.current === 'slam') audioUrl = 'https://assets.mixkit.co/active_storage/sfx/218/218-preview.mp3'; // deep roar
+                          else audioUrl = 'https://assets.mixkit.co/active_storage/sfx/215/215-preview.mp3'; 
                       }
+                      
                       const audio = new Audio(audioUrl); 
-                      audio.volume = (type === 'bear' ? 0.9 : type === 'lion' ? 1.0 : 0.6) * useStore.getState().volume;
-                      audio.playbackRate = type === 'bear' ? 0.7 + Math.random() * 0.2 : type === 'lion' ? 0.8 + Math.random() * 0.2 : 1.4 + Math.random() * 0.3;
+                      audio.volume = (type === 'goliath' ? 1.0 : type === 'bear' ? 0.9 : 0.6) * useStore.getState().volume;
+                      audio.playbackRate = type === 'goliath' ? 0.5 : type === 'bear' ? 0.7 + Math.random() * 0.2 : 1.4 + Math.random() * 0.3;
                       audio.play().catch(() => {});
-                      
-                      if (isPlayerBlocking) {
-                          // Block sound
-                          const blockAudio = new Audio('https://assets.mixkit.co/active_storage/sfx/2952/2952-preview.mp3'); // Knife clink sound for block
-                          blockAudio.volume = 0.5;
-                          blockAudio.playbackRate = 0.5; // Lower pitch for block
-                          blockAudio.play().catch(() => {});
-                          
-                          // Visual feedback for block
-                          useStore.getState().addEffect([pPos.x, pPos.y + 1, pPos.z], 'flash');
-                      }
-                      
-                      // Knockback Player (Optional, maybe just visual shake)
                   }
               }
-              
-              setTimeout(() => {
-                  isAttacking.current = false;
-                  lastAttackTime.current = Date.now();
-                  if (group.current) group.current.rotation.x = 0;
-              }, 500);
-          }, 400);
+          }
+
+          // Finish Attack
+          if (attackTime > totalDuration) {
+              isAttacking.current = false;
+              lastAttackTime.current = Date.now();
+              if (group.current) {
+                  group.current.rotation.x = 0;
+                  group.current.rotation.y = 0;
+                  group.current.rotation.z = 0;
+              }
+          }
       }
 
     } else if (now - lastSeenPlayer.current > 5000 && state !== 'search') {
@@ -489,10 +551,33 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
 
       if (isAttacking.current) {
           const attackTime = Date.now() - attackStartTime.current;
-          // Wind up (0-400ms)
-          if (attackTime < 400) {
-              const progress = attackTime / 400;
-              if (type === 'bear') {
+          let windupDuration = 400;
+          let totalDuration = 900;
+          
+          if (type === 'goliath') {
+              if (currentAttackType.current === 'slam') { windupDuration = 800; totalDuration = 1400; }
+              else if (currentAttackType.current === 'charge') { windupDuration = 600; totalDuration = 1200; }
+              else { windupDuration = 500; totalDuration = 1000; } // sweep
+          }
+
+          // Wind up
+          if (attackTime < windupDuration) {
+              const progress = attackTime / windupDuration;
+              if (type === 'goliath') {
+                  if (currentAttackType.current === 'slam') {
+                      group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0.5, progress * 0.2);
+                      group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, -0.3, progress * 0.2); // lean back
+                      group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, 0.2, progress * 0.2); 
+                      if(legFRRef.current) legFRRef.current.rotation.x = THREE.MathUtils.lerp(legFRRef.current.rotation.x, -2.8, progress * 0.5); // raise spear hugely
+                  } else if (currentAttackType.current === 'charge') {
+                      group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, -0.2, progress * 0.2);
+                      group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.4, progress * 0.2); // lean forward for charge
+                      if(legFRRef.current) legFRRef.current.rotation.x = THREE.MathUtils.lerp(legFRRef.current.rotation.x, -1.0, progress * 0.3); // point spear forward
+                  } else { // sweep
+                      group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, 1.2, progress * 0.3); // twist far right
+                      if(legFRRef.current) legFRRef.current.rotation.z = THREE.MathUtils.lerp(legFRRef.current.rotation.z, -1.0, progress * 0.3); // pull arm out
+                  }
+              } else if (type === 'bear') {
                   group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 1.0, progress * 0.2);
                   group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, -0.6, progress * 0.2);
               } else if (type === 'lion') {
@@ -502,10 +587,22 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                   group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0.2, progress * 0.2);
                   group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, -0.5, progress * 0.2);
               }
-          } else if (attackTime < 900) {
-              // Lunge (400-900ms)
-              const progress = (attackTime - 400) / 500;
-              if (type === 'bear') {
+          } else if (attackTime < totalDuration) {
+              // Lunge
+              const progress = (attackTime - windupDuration) / (totalDuration - windupDuration);
+              if (type === 'goliath') {
+                  if (currentAttackType.current === 'slam') {
+                      group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, -0.3, progress);
+                      group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.6, progress);
+                      if(legFRRef.current) legFRRef.current.rotation.x = THREE.MathUtils.lerp(legFRRef.current.rotation.x, 1.5, progress * 2); // smash down
+                  } else if (currentAttackType.current === 'charge') {
+                      group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, Math.sin(progress * Math.PI * 4) * 0.2, progress); // bouncy charge
+                      group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.5, progress); 
+                  } else { // sweep
+                      group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, -1.2, progress * 1.5); // rapid sweeping twist left
+                      if(legFRRef.current) legFRRef.current.rotation.z = THREE.MathUtils.lerp(legFRRef.current.rotation.z, 0, progress); // arm comes across
+                  }
+              } else if (type === 'bear') {
                   group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, 0, progress);
                   group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.6, progress);
               } else if (type === 'lion') {
@@ -530,7 +627,12 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, lerpFactor);
       } else {
           // Normal movement animation
-          if (type === 'lion' && (state === 'chase' || state === 'evade' || state === 'flank' || state === 'flee' || state === 'berserk')) {
+          if (type === 'goliath' && (state === 'chase' || state === 'evade' || state === 'flank' || state === 'flee' || state === 'berserk')) {
+              const walkCycle = clockState.clock.elapsedTime * freq * 0.6; // slow
+              group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, Math.abs(Math.sin(walkCycle * 2)) * 0.15, lerpFactor);
+              group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, Math.sin(walkCycle) * 0.08, lerpFactor); // side to side sway
+              group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.1, lerpFactor);
+          } else if (type === 'lion' && (state === 'chase' || state === 'evade' || state === 'flank' || state === 'flee' || state === 'berserk')) {
              // Feline bounding run - more aggressive and lower to the ground
              const runCycle = clockState.clock.elapsedTime * freq * 0.8;
              group.current.position.y = THREE.MathUtils.lerp(group.current.position.y, Math.abs(Math.sin(runCycle)) * 0.6 - 0.1, lerpFactor);
@@ -561,7 +663,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
              group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.1, lerpFactor); // Slightly hunched
           } else if (state === 'berserk') {
              group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0.2, lerpFactor); // Leaning forward aggressively
-          } else if (type !== 'lion' && type !== 'bear') {
+          } else if (type !== 'lion' && type !== 'bear' && type !== 'goliath') {
              group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, 0, lerpFactor);
              group.current.rotation.z = THREE.MathUtils.lerp(group.current.rotation.z, 0, lerpFactor);
           }
@@ -575,20 +677,28 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           const swingFreq = freq * speedMultiplier;
           const swingAmp = isMoving ? 0.6 : 0;
           
-          if (type === 'lion' && (state === 'chase' || state === 'evade' || state === 'flee' || state === 'berserk')) {
-              // Bounding run for lion
-              const runCycle = clockState.clock.elapsedTime * swingFreq * 0.8;
-              legFLRef.current.rotation.x = Math.sin(runCycle) * swingAmp;
-              legFRRef.current.rotation.x = Math.sin(runCycle + 0.5) * swingAmp; // Slight offset
-              legBLRef.current.rotation.x = -Math.sin(runCycle) * swingAmp;
-              legBRRef.current.rotation.x = -Math.sin(runCycle + 0.5) * swingAmp;
-          } else {
-              // Alternating trot/walk
-              const runCycle = clockState.clock.elapsedTime * swingFreq;
-              legFLRef.current.rotation.x = Math.sin(runCycle) * swingAmp;
-              legFRRef.current.rotation.x = Math.sin(runCycle + Math.PI) * swingAmp;
-              legBLRef.current.rotation.x = Math.sin(runCycle + Math.PI) * swingAmp;
-              legBRRef.current.rotation.x = Math.sin(runCycle) * swingAmp;
+          if (!isAttacking.current) {
+              if (type === 'goliath') {
+                  const walkCycle = clockState.clock.elapsedTime * swingFreq * 0.6;
+                  legFLRef.current.rotation.x = -0.5 + Math.sin(walkCycle) * (swingAmp * 0.3); // Shield arm held forward
+                  legFRRef.current.rotation.x = Math.sin(walkCycle + Math.PI) * (swingAmp * 0.3); // Spear arm somewhat stable
+                  legBLRef.current.rotation.x = Math.sin(walkCycle + Math.PI) * swingAmp;
+                  legBRRef.current.rotation.x = Math.sin(walkCycle) * swingAmp;
+              } else if (type === 'lion' && (state === 'chase' || state === 'evade' || state === 'flee' || state === 'berserk')) {
+                  // Bounding run for lion
+                  const runCycle = clockState.clock.elapsedTime * swingFreq * 0.8;
+                  legFLRef.current.rotation.x = Math.sin(runCycle) * swingAmp;
+                  legFRRef.current.rotation.x = Math.sin(runCycle + 0.5) * swingAmp; // Slight offset
+                  legBLRef.current.rotation.x = -Math.sin(runCycle) * swingAmp;
+                  legBRRef.current.rotation.x = -Math.sin(runCycle + 0.5) * swingAmp;
+              } else {
+                  // Alternating trot/walk
+                  const runCycle = clockState.clock.elapsedTime * swingFreq;
+                  legFLRef.current.rotation.x = Math.sin(runCycle) * swingAmp;
+                  legFRRef.current.rotation.x = Math.sin(runCycle + Math.PI) * swingAmp;
+                  legBLRef.current.rotation.x = Math.sin(runCycle + Math.PI) * swingAmp;
+                  legBRRef.current.rotation.x = Math.sin(runCycle) * swingAmp;
+              }
           }
       }
 
@@ -658,7 +768,14 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
     const newHealth = health - damage;
     
     if (rigidBody.current) {
-      const pos = rigidBody.current.translation();
+      let pos, playerPos;
+      try {
+        pos = rigidBody.current.translation();
+        if (playerRef.current) {
+            playerPos = playerRef.current.translation();
+        }
+      } catch { return; }
+      
       // Blood effect at impact or center
       addEffect(impactPos ? [impactPos.x, impactPos.y, impactPos.z] : [pos.x, pos.y + 0.5, pos.z], 'blood');
       
@@ -666,8 +783,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
       addEffect(impactPos ? [impactPos.x, impactPos.y, impactPos.z] : [pos.x, pos.y + 0.5, pos.z], 'impact');
 
       // Knockback
-      if (playerRef.current) {
-          const playerPos = playerRef.current.translation();
+      if (playerPos) {
           const knockbackDir = new THREE.Vector3(pos.x - playerPos.x, 0, pos.z - playerPos.z).normalize();
           // Less knockback if blocking
           const knockbackForce = isBlocking ? 5 : 10;
@@ -690,7 +806,10 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
       incrementKills();
       
       if (rigidBody.current) {
-        const pos = rigidBody.current.translation();
+        let pos;
+        try {
+            pos = rigidBody.current.translation();
+        } catch { return; }
         addEffect([pos.x, pos.y, pos.z], 'smoke');
         addEffect([pos.x, pos.y + 1, pos.z], 'smoke');
         addEffect([pos.x, pos.y + 0.5, pos.z], 'blood');
@@ -782,8 +901,219 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
 
         {/* Enemy Body - High Res & Menacing */}
         <group position={[0, isHumanoid ? 0.9 : 0.4, 0]}>
-           {/* Humanoid Body */}
-           {isHumanoid ? (
+           {type === 'goliath' ? (
+             <group>
+               {/* Torso - Massive Muscle Cuirass */}
+               <mesh ref={bodyRef} castShadow position={[0, 0.5, 0]}>
+                 <boxGeometry args={[0.7, 0.9, 0.4]} />
+                 <meshPhysicalMaterial 
+                   color={isStaggered ? "#800" : "#b8860b"} 
+                   roughness={0.6} 
+                   metalness={0.9}
+                   clearcoat={0.3}
+                   clearcoatRoughness={0.8}
+                 />
+               </mesh>
+               
+               {/* Pectoral Plates */}
+               <mesh position={[0.18, 0.7, 0.2]} rotation={[0, 0.1, 0]}>
+                 <boxGeometry args={[0.3, 0.35, 0.1]} />
+                 <meshPhysicalMaterial color={"#ffd700"} roughness={0.3} metalness={1.0} clearcoat={0.5} clearcoatRoughness={0.2} />
+               </mesh>
+               <mesh position={[-0.18, 0.7, 0.2]} rotation={[0, -0.1, 0]}>
+                 <boxGeometry args={[0.3, 0.35, 0.1]} />
+                 <meshPhysicalMaterial color={"#ffd700"} roughness={0.3} metalness={1.0} clearcoat={0.5} clearcoatRoughness={0.2} />
+               </mesh>
+
+               {/* Abs / Lower Armor */}
+               <mesh position={[0, 0.4, 0.2]}>
+                 <boxGeometry args={[0.5, 0.3, 0.1]} />
+                 <meshPhysicalMaterial color={"#a67c00"} roughness={0.6} metalness={0.8} />
+               </mesh>
+               
+               {/* Goliath's Cape */}
+               <mesh position={[0, 0.4, -0.25]} rotation={[0.1, 0, 0]}>
+                  <cylinderGeometry args={[0.3, 0.6, 1.6, 16, 1, false, Math.PI * 0.8, Math.PI * 1.4]} />
+                  <meshPhysicalMaterial color="#3e0000" roughness={1.0} clearcoat={0.0} side={THREE.DoubleSide} />
+               </mesh>
+
+               {/* Belt & Skirt */}
+               <mesh position={[0, 0.1, 0]}>
+                 <cylinderGeometry args={[0.4, 0.45, 0.2, 16]} />
+                 <meshPhysicalMaterial color="#3e2723" roughness={0.9} />
+               </mesh>
+               {/* Leather Pteruges (Skirt strips) - Detailed */}
+               {[...Array(10)].map((_, i) => (
+                 <mesh key={i} position={[Math.cos(i * Math.PI / 5) * 0.42, -0.2, Math.sin(i * Math.PI / 5) * 0.42]} rotation={[0, -i * Math.PI / 5, 0]}>
+                   <boxGeometry args={[0.2, 0.6, 0.04]} />
+                   <meshPhysicalMaterial color="#3e2723" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.9} />
+                 </mesh>
+               ))}
+               {/* Gold Plates on Pteruges */}
+               {[...Array(10)].map((_, i) => (
+                 <mesh key={`gold_${i}`} position={[Math.cos(i * Math.PI / 5) * 0.44, -0.3, Math.sin(i * Math.PI / 5) * 0.44]} rotation={[0, -i * Math.PI / 5, 0]}>
+                   <boxGeometry args={[0.15, 0.1, 0.02]} />
+                   <meshPhysicalMaterial color="#b8860b" roughness={0.4} metalness={0.8} />
+                 </mesh>
+               ))}
+
+               {/* Head & Helmet */}
+               <group position={[0, 1.2, 0]}>
+                 {/* Face - Details */}
+                 <mesh position={[0, -0.05, 0]}>
+                   <boxGeometry args={[0.3, 0.35, 0.3]} />
+                   <meshPhysicalMaterial color="#5d4037" roughness={0.8} /> {/* Darker skin tone */}
+                 </mesh>
+                 {/* Beard */}
+                 <mesh position={[0, -0.2, 0.1]}>
+                    <boxGeometry args={[0.32, 0.15, 0.25]} />
+                    <meshPhysicalMaterial color="#1a1a1a" roughness={0.9} />
+                 </mesh>
+                 {/* Glowing Eyes */}
+                 <mesh position={[0.08, 0.05, 0.16]}>
+                   <sphereGeometry args={[0.04, 8, 8]} />
+                   <meshBasicMaterial color="#ff3300" />
+                 </mesh>
+                 <mesh position={[-0.08, 0.05, 0.16]}>
+                   <sphereGeometry args={[0.04, 8, 8]} />
+                   <meshBasicMaterial color="#ff3300" />
+                 </mesh>
+                 {/* Helmet Base */}
+                 <mesh position={[0, 0.05, 0]}>
+                   <cylinderGeometry args={[0.18, 0.18, 0.35, 32]} />
+                   <meshPhysicalMaterial color="#a67c00" metalness={0.9} roughness={0.4} clearcoat={0.2} clearcoatRoughness={0.5} />
+                 </mesh>
+                 {/* Helmet Crest/Plume */}
+                 <mesh position={[0, 0.35, -0.1]} rotation={[-0.2, 0, 0]}>
+                   <cylinderGeometry args={[0.05, 0.08, 0.5, 16]} />
+                   <meshPhysicalMaterial color="#8b0000" roughness={0.8} />
+                 </mesh>
+                 <mesh position={[0, 0.45, 0.05]} rotation={[0.4, 0, 0]}>
+                   <cylinderGeometry args={[0.08, 0.02, 0.4, 16]} />
+                   <meshPhysicalMaterial color="#8b0000" roughness={0.8} />
+                 </mesh>
+                 {/* Helmet Nose Guard */}
+                 <mesh position={[0, 0, 0.18]}>
+                   <boxGeometry args={[0.06, 0.2, 0.05]} />
+                   <meshPhysicalMaterial color="#b8860b" metalness={0.9} roughness={0.3} />
+                 </mesh>
+                 <mesh position={[0.16, 0, 0.12]} rotation={[0, 0.5, 0]}>
+                   <boxGeometry args={[0.1, 0.25, 0.05]} />
+                   <meshPhysicalMaterial color="#b8860b" metalness={0.9} roughness={0.3} />
+                 </mesh>
+                 <mesh position={[-0.16, 0, 0.12]} rotation={[0, -0.5, 0]}>
+                   <boxGeometry args={[0.1, 0.25, 0.05]} />
+                   <meshPhysicalMaterial color="#b8860b" metalness={0.9} roughness={0.3} />
+                 </mesh>
+               </group>
+
+               {/* Right Arm (Spear) */}
+               <group position={[0.5, 0.8, 0]} ref={legFRRef}>
+                 {/* Pauldron */}
+                 <mesh position={[0, 0.1, 0]} rotation={[0, 0, -0.2]}>
+                   <sphereGeometry args={[0.25, 16, 16, 0, Math.PI, 0, Math.PI]} />
+                   <meshPhysicalMaterial color="#ffd700" metalness={1.0} roughness={0.3} clearcoat={0.5} />
+                 </mesh>
+                 <mesh position={[0, -0.3, 0]}>
+                   <boxGeometry args={[0.2, 0.7, 0.2]} />
+                   <meshPhysicalMaterial color="#5d4037" roughness={0.7} />
+                 </mesh>
+                 {/* Bracer */}
+                 <mesh position={[0, -0.5, 0]}>
+                   <cylinderGeometry args={[0.12, 0.1, 0.3, 16]} />
+                   <meshPhysicalMaterial color="#a67c00" metalness={0.9} roughness={0.4} clearcoat={0.2} />
+                 </mesh>
+                 {/* Giant Spear */}
+                 <group position={[0, -0.6, 0.3]} rotation={[Math.PI / 2 + 0.2, 0, 0]}>
+                   {/* Shaft */}
+                   <mesh>
+                     <cylinderGeometry args={[0.04, 0.04, 2.5, 8]} />
+                     <meshPhysicalMaterial color="#3e2723" roughness={0.9} />
+                   </mesh>
+                   {/* Spear Tip */}
+                   <mesh position={[0, 1.4, 0]}>
+                     <coneGeometry args={[0.1, 0.4, 4]} />
+                     <meshPhysicalMaterial color="#90a4ae" metalness={0.9} roughness={0.3} />
+                   </mesh>
+                   <mesh position={[0, 1.25, 0]}>
+                     <boxGeometry args={[0.15, 0.1, 0.05]} />
+                     <meshPhysicalMaterial color="#b8860b" metalness={0.8} roughness={0.4} />
+                   </mesh>
+                 </group>
+               </group>
+
+               {/* Left Arm (Shield) */}
+               <group position={[-0.5, 0.8, 0]} ref={legFLRef}>
+                 {/* Pauldron */}
+                 <mesh position={[0, 0.1, 0]} rotation={[0, 0, 0.2]}>
+                   <sphereGeometry args={[0.25, 16, 16, 0, Math.PI, 0, Math.PI]} />
+                   <meshPhysicalMaterial color="#ffd700" metalness={1.0} roughness={0.3} clearcoat={0.5} />
+                 </mesh>
+                 <mesh position={[0, -0.3, 0]}>
+                   <boxGeometry args={[0.2, 0.7, 0.2]} />
+                   <meshPhysicalMaterial color="#5d4037" roughness={0.7} />
+                 </mesh>
+                 {/* Bracer */}
+                 <mesh position={[0, -0.5, 0]}>
+                   <cylinderGeometry args={[0.12, 0.1, 0.3, 16]} />
+                   <meshPhysicalMaterial color="#a67c00" metalness={0.9} roughness={0.4} clearcoat={0.2} />
+                 </mesh>
+                 {/* Massive Shield */}
+                 <group position={[-0.2, -0.2, 0.3]} rotation={[Math.PI / 2, 0, -0.2]}>
+                   <mesh>
+                     <cylinderGeometry args={[0.6, 0.6, 0.1, 16]} />
+                     <meshPhysicalMaterial color="#b8860b" metalness={0.8} roughness={0.5} />
+                   </mesh>
+                   <mesh position={[0, 0.05, 0]}>
+                     <sphereGeometry args={[0.15, 16, 16, 0, Math.PI*2, 0, Math.PI/2]} />
+                     <meshPhysicalMaterial color="#90a4ae" metalness={0.9} roughness={0.3} />
+                   </mesh>
+                 </group>
+               </group>
+
+               {/* Legs */}
+               <group position={[0.25, -0.1, 0]} ref={legBRRef}>
+                 <mesh position={[0, -0.5, 0]}>
+                   <boxGeometry args={[0.25, 0.9, 0.25]} />
+                   <meshPhysicalMaterial color="#5d4037" roughness={0.7} />
+                 </mesh>
+                 {/* Greave */}
+                 <mesh position={[0, -0.55, 0.05]} rotation={[0.05, 0, 0]}>
+                   <cylinderGeometry args={[0.15, 0.12, 0.6, 16]} />
+                   <meshPhysicalMaterial color="#a67c00" metalness={0.9} roughness={0.4} clearcoat={0.2} />
+                 </mesh>
+                 {/* Foot / Sandal */}
+                 <mesh position={[0, -0.95, 0.1]}>
+                   <boxGeometry args={[0.25, 0.15, 0.35]} />
+                   <meshPhysicalMaterial color="#5d4037" roughness={0.7} />
+                 </mesh>
+                 <mesh position={[0, -1.02, 0.1]}>
+                   <boxGeometry args={[0.27, 0.05, 0.37]} />
+                   <meshPhysicalMaterial color="#3e2723" roughness={0.9} />
+                 </mesh>
+               </group>
+               <group position={[-0.25, -0.1, 0]} ref={legBLRef}>
+                 <mesh position={[0, -0.5, 0]}>
+                   <boxGeometry args={[0.25, 0.9, 0.25]} />
+                   <meshPhysicalMaterial color="#5d4037" roughness={0.7} />
+                 </mesh>
+                 {/* Greave */}
+                 <mesh position={[0, -0.55, 0.05]} rotation={[0.05, 0, 0]}>
+                   <cylinderGeometry args={[0.15, 0.12, 0.6, 16]} />
+                   <meshPhysicalMaterial color="#a67c00" metalness={0.9} roughness={0.4} clearcoat={0.2} />
+                 </mesh>
+                 {/* Foot / Sandal */}
+                 <mesh position={[0, -0.95, 0.1]}>
+                   <boxGeometry args={[0.25, 0.15, 0.35]} />
+                   <meshPhysicalMaterial color="#5d4037" roughness={0.7} />
+                 </mesh>
+                 <mesh position={[0, -1.02, 0.1]}>
+                   <boxGeometry args={[0.27, 0.05, 0.37]} />
+                   <meshPhysicalMaterial color="#3e2723" roughness={0.9} />
+                 </mesh>
+               </group>
+             </group>
+           ) : isHumanoid ? (
              <group>
                {/* Torso - Armor */}
                <mesh ref={bodyRef} castShadow position={[0, 0.4, 0]}>
@@ -793,7 +1123,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                {/* Breastplate Detail */}
                <mesh position={[0, 0.45, 0.1]} scale={[1.05, 1, 1.1]}>
                   <boxGeometry args={[0.45, 0.6, 0.1]} />
-                  <meshPhysicalMaterial color={type === 'goliath' ? "#ffd700" : "#78909c"} metalness={0.8} roughness={0.2} />
+                  <meshPhysicalMaterial color={"#78909c"} metalness={0.8} roughness={0.2} />
                </mesh>
                {/* Head */}
                <mesh position={[0, 1.0, 0]}>
@@ -803,7 +1133,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                {/* Helmet */}
                <mesh position={[0, 1.1, 0]} rotation={[-0.2, 0, 0]}>
                  <sphereGeometry args={[0.26, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
-                 <meshPhysicalMaterial color={type === 'goliath' ? "#ffd700" : "#555"} metalness={0.8} roughness={0.2} />
+                 <meshPhysicalMaterial color={"#555"} metalness={0.8} roughness={0.2} />
                </mesh>
                {/* Arms */}
                <group position={[0.35, 0.7, 0]} ref={legFRRef}>

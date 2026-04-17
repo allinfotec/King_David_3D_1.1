@@ -77,21 +77,6 @@ function Spawner() {
       enemyType = 'lion';
       enemyHealth = 150;
     } else if (phase === 4) {
-      targetKills = 15;
-      maxAtOnce = 5;
-      enemyType = 'philistine_soldier';
-      enemyHealth = 40;
-    } else if (phase === 5) {
-      targetKills = 10;
-      maxAtOnce = 4;
-      enemyType = 'philistine_archer';
-      enemyHealth = 35;
-    } else if (phase === 6) {
-      targetKills = 8;
-      maxAtOnce = 3;
-      enemyType = 'philistine_heavy';
-      enemyHealth = 100;
-    } else if (phase === 7) {
       targetKills = 1;
       maxAtOnce = 1;
       enemyType = 'goliath';
@@ -113,19 +98,10 @@ function Spawner() {
         setPhaseMessage("O LEÃO FOI DERROTADO! Mas a guerra começou... Filisteus atacam!");
         state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
       } else if (phase === 4) {
-        setPhaseMessage("Soldados derrotados! Arqueiros inimigos se aproximam!");
-        state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
-      } else if (phase === 5) {
-        setPhaseMessage("Arqueiros vencidos! Cuidado com a infantaria pesada!");
-        state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
-      } else if (phase === 6) {
-        setPhaseMessage("A elite caiu! Agora... O GIGANTE GOLIAS APARECE!");
-        state.transitionTimeout = setTimeout(() => nextPhase(), 5000);
-      } else if (phase === 7) {
         setPhaseMessage("VITÓRIA ÉPICA! GOLIAS FOI DERROTADO!");
         state.transitionTimeout = setTimeout(() => {
           document.exitPointerLock();
-          useStore.getState().setStoryScreen(9); // Or a new victory screen
+          useStore.getState().setStoryScreen(13); // Goliath victory screen
           useStore.getState().setPhaseMessage(null);
         }, 5000);
       }
@@ -208,10 +184,14 @@ function UI() {
           <button 
             onClick={() => {
               retryPhase();
-              setTimeout(() => {
-                const canvas = document.querySelector('canvas');
-                canvas?.requestPointerLock();
-              }, 100);
+              const canvas = document.querySelector('canvas');
+              if (canvas) {
+                try {
+                  canvas.requestPointerLock();
+                } catch (e) {
+                  console.error(e);
+                }
+              }
             }}
             className="px-8 py-4 bg-white text-black font-bold rounded hover:bg-gray-200"
           >
@@ -398,27 +378,29 @@ function UI() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 place-items-center">
-            {/* Top Left: Special Ability (Faith) */}
-            <button 
-                className={`w-16 h-16 rounded-full border-2 flex flex-col items-center justify-center transition-all shadow-lg ${faith >= 20 ? 'bg-blue-600/60 border-blue-400 animate-pulse' : 'bg-gray-800/60 border-gray-600 opacity-50'}`}
-                onClick={() => {
-                  if (faith >= 20) {
-                    window.dispatchEvent(new Event('faithDivine'));
-                  }
-                }}
-            >
-                <span className="text-white font-bold text-[10px]">FÉ</span>
-                <span className="text-white font-bold text-[8px]">DIVINA</span>
-            </button>
+            {/* Top Left: Stone (Square) */}
+            <div className={`relative rounded-xl transition-all ${weapon === 'sling' ? 'ring-4 ring-yellow-400 scale-110' : ''}`}>
+              <AimJoystick 
+                onAim={(x, y) => window.dispatchEvent(new CustomEvent('aimJoystickMove', { detail: { x, y } }))}
+                onAttack={() => triggerAttack('sling')}
+                icon={<RectangleVertical size={24} strokeWidth={2.5} />}
+                label="PEDRA"
+                colorClass="bg-yellow-900/40 border-yellow-500 text-yellow-500 shadow-[0_0_15px_rgba(250,204,21,0.3)]"
+              />
+            </div>
 
             {/* Top Right: Sword */}
-            <AimJoystick 
-              onAim={(x, y) => window.dispatchEvent(new CustomEvent('aimJoystickMove', { detail: { x, y } }))}
-              onAttack={() => triggerAttack('knife')}
-              icon={<Sword size={24} strokeWidth={2.5} />}
-              label="ESPADA"
-              colorClass="bg-gray-100/20 border-white text-white shadow-[0_0_15px_rgba(255,255,255,0.3)]"
-            />
+            <button 
+                className="w-20 h-20 rounded-full bg-gray-100/20 border-2 border-white flex flex-col items-center justify-center text-white font-bold transition-all shadow-[0_0_15px_rgba(255,255,255,0.3)] active:bg-gray-300/40 touch-manipulation hover:scale-105 active:scale-95"
+                onPointerDown={(e) => {
+                    e.preventDefault();
+                    triggerAttack('knife');
+                }}
+                onContextMenu={(e) => e.preventDefault()}
+            >
+                <Sword size={32} strokeWidth={2.5} />
+                <span className="text-[10px] font-bold mt-1 tracking-wider">ESPADA</span>
+            </button>
 
             {/* Bottom Left: Defense Button */}
             <button 

@@ -21,6 +21,7 @@ export function Player() {
   const { isPaused, shootStone, damageEnemy, addEffect, setDodging, health, retryCount, isAnointing, volume, isMounted, faith, useFaith, addFaith, weapon, setWeapon } = useStore();
   const playerMesh = useRef<THREE.Group>(null);
   const horseRef = useRef<THREE.Group>(null);
+  const shieldMeshRef = useRef<THREE.Mesh>(null);
   const [lastFaithTime, setLastFaithTime] = useState(0);
 
   const PLAYER_SPEED = isMounted ? SPEED * 1.8 : SPEED;
@@ -207,8 +208,19 @@ export function Player() {
         setWeapon(e.detail);
     };
 
-    const handleBlockStart = () => { keys.current.block = true; };
-    const handleBlockEnd = () => { keys.current.block = false; };
+    let blockTimeout: NodeJS.Timeout | null = null;
+
+    const handleBlockStart = () => { 
+        keys.current.block = true; 
+        if (blockTimeout) clearTimeout(blockTimeout);
+    };
+    
+    const handleBlockEnd = () => { 
+        // Ensure shield is up for at least a brief moment for visual feedback
+        blockTimeout = setTimeout(() => {
+            keys.current.block = false; 
+        }, 200); // 200ms minimum block time on click/tap
+    };
     
     const handleFaithDivine = () => {
         const now = Date.now();
@@ -303,7 +315,10 @@ export function Player() {
           // Delay shot for windup animation (100ms) - Reduced for responsiveness
           setTimeout(() => {
               if (!playerRef.current) return;
-              const pos = playerRef.current.translation();
+              let pos;
+              try {
+                  pos = playerRef.current.translation();
+              } catch { return; }
               
               const direction = new THREE.Vector3();
               camera.getWorldDirection(direction);
@@ -364,7 +379,10 @@ export function Player() {
         }
         
         const enemies = useStore.getState().enemies;
-        const playerPos = playerRef.current?.translation();
+        let playerPos;
+        try {
+            playerPos = playerRef.current?.translation();
+        } catch { return; }
         if (!playerPos) return;
         
         const playerVec = new THREE.Vector3(playerPos.x, playerPos.y, playerPos.z);
@@ -460,13 +478,14 @@ export function Player() {
   });
 
   useFrame((state, delta) => {
-    const { isTransitioningPhase, isAnointing } = useStore.getState();
-    if (!playerRef.current || isPaused || health <= 0) return;
+    try {
+        const { isTransitioningPhase, isAnointing } = useStore.getState();
+        if (!playerRef.current || isPaused || health <= 0) return;
 
-    if (isTransitioningPhase) {
-        playerRef.current.setLinvel({ x: 0, y: playerRef.current.linvel().y, z: 0 }, true);
-        return;
-    }
+        if (isTransitioningPhase) {
+            playerRef.current.setLinvel({ x: 0, y: playerRef.current.linvel().y, z: 0 }, true);
+            return;
+        }
 
     if (isAnointing) {
         playerRef.current.setLinvel({ x: 0, y: playerRef.current.linvel().y, z: 0 }, true);
@@ -925,6 +944,11 @@ export function Player() {
             playerMesh.current.rotation.z = Math.sin(time * freq * 0.5) * 0.05; // Slight side-to-side sway
             playerMesh.current.rotation.x = 0.1; // Slight lean forward when walking
             
+            if (!isAttacking) {
+                playerMesh.current.rotation.y = THREE.MathUtils.lerp(playerMesh.current.rotation.y, 0, 1 - Math.exp(-10 * delta));
+                playerMesh.current.position.z = THREE.MathUtils.lerp(playerMesh.current.position.z, 0, 1 - Math.exp(-10 * delta));
+            }
+            
             // Right arm follows walk cycle unless attacking or blocking
             if (!isAttacking && !keys.current.block) {
                 rightArm.current.rotation.x = Math.sin(time * freq) * amp;
@@ -934,19 +958,23 @@ export function Player() {
             // Idle - Breathing
             const breathe = Math.sin(time * 2) * 0.02;
             const lerpFactor = 1 - Math.exp(-10 * delta);
-            playerMesh.current.position.y = THREE.MathUtils.lerp(playerMesh.current.position.y, -0.8 + breathe, lerpFactor);
-            playerMesh.current.rotation.z = THREE.MathUtils.lerp(playerMesh.current.rotation.z, 0, lerpFactor);
-            playerMesh.current.rotation.x = THREE.MathUtils.lerp(playerMesh.current.rotation.x, 0, lerpFactor);
-
-            leftLeg.current.rotation.x = THREE.MathUtils.lerp(leftLeg.current.rotation.x, 0, lerpFactor);
-            rightLeg.current.rotation.x = THREE.MathUtils.lerp(rightLeg.current.rotation.x, 0, lerpFactor);
             
             if (!keys.current.block) {
+                playerMesh.current.position.y = THREE.MathUtils.lerp(playerMesh.current.position.y, -0.8 + breathe, lerpFactor);
+                playerMesh.current.rotation.z = THREE.MathUtils.lerp(playerMesh.current.rotation.z, 0, lerpFactor);
+                playerMesh.current.rotation.x = THREE.MathUtils.lerp(playerMesh.current.rotation.x, 0, lerpFactor);
+                
+                leftLeg.current.rotation.x = THREE.MathUtils.lerp(leftLeg.current.rotation.x, 0, lerpFactor);
+                rightLeg.current.rotation.x = THREE.MathUtils.lerp(rightLeg.current.rotation.x, 0, lerpFactor);
+                
                 leftArm.current.rotation.x = THREE.MathUtils.lerp(leftArm.current.rotation.x, 0, lerpFactor);
                 leftArm.current.rotation.z = THREE.MathUtils.lerp(leftArm.current.rotation.z, 0.1, lerpFactor);
             }
-
+            
             if (!isAttacking && !keys.current.block) {
+                playerMesh.current.rotation.y = THREE.MathUtils.lerp(playerMesh.current.rotation.y, 0, lerpFactor);
+                playerMesh.current.position.z = THREE.MathUtils.lerp(playerMesh.current.position.z, 0, lerpFactor);
+                
                 rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, 0, lerpFactor);
                 rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, -0.1, lerpFactor);
             }
@@ -954,13 +982,49 @@ export function Player() {
 
         // Block Animation
         if (keys.current.block) {
-            const blockLerp = 1 - Math.exp(-20 * delta);
-            leftArm.current.rotation.x = THREE.MathUtils.lerp(leftArm.current.rotation.x, -Math.PI * 0.6, blockLerp);
-            leftArm.current.rotation.z = THREE.MathUtils.lerp(leftArm.current.rotation.z, 0.5, blockLerp);
+            const blockLerp = 1 - Math.exp(-35 * delta); // Faster snap for snapping feedback on block
+            
+            // Body crouch and lean back significantly to brace
+            playerMesh.current.position.y = THREE.MathUtils.lerp(playerMesh.current.position.y, -1.1, blockLerp);
+            playerMesh.current.rotation.x = THREE.MathUtils.lerp(playerMesh.current.rotation.x, -0.2, blockLerp);
+            playerMesh.current.rotation.y = THREE.MathUtils.lerp(playerMesh.current.rotation.y, -0.4, blockLerp); // Turn side to block
+            playerMesh.current.position.z = THREE.MathUtils.lerp(playerMesh.current.position.z, 0.2, blockLerp); // Lean back
+
+            // Left arm holds shield up and completely across the body high up
+            leftArm.current.rotation.x = THREE.MathUtils.lerp(leftArm.current.rotation.x, -Math.PI * 0.7, blockLerp);
+            leftArm.current.rotation.z = THREE.MathUtils.lerp(leftArm.current.rotation.z, 0.4, blockLerp);
+            leftArm.current.rotation.y = THREE.MathUtils.lerp(leftArm.current.rotation.y, 1.2, blockLerp);
+            
+            // Legs brace for impact (one forward, one back)
+            leftLeg.current.rotation.x = THREE.MathUtils.lerp(leftLeg.current.rotation.x, -0.4, blockLerp);
+            rightLeg.current.rotation.x = THREE.MathUtils.lerp(rightLeg.current.rotation.x, 0.2, blockLerp);
+
+            // Left leg bends
+            leftLeg.current.position.y = THREE.MathUtils.lerp(leftLeg.current.position.y, -0.3, blockLerp);
+            leftLeg.current.position.z = THREE.MathUtils.lerp(leftLeg.current.position.z, -0.3, blockLerp);
             
             if (!isAttacking) {
-                rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, -Math.PI * 0.6, blockLerp);
+                // Right arm tucked in close for safety
+                rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, -Math.PI * 0.2, blockLerp);
                 rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, -0.5, blockLerp);
+                rightArm.current.rotation.y = THREE.MathUtils.lerp(rightArm.current.rotation.y, -0.5, blockLerp);
+            }
+        } else {
+            // Reset block rotations if not blocking
+            leftArm.current.rotation.y = THREE.MathUtils.lerp(leftArm.current.rotation.y, 0, 1 - Math.exp(-15 * delta));
+            
+            // Reset leg shifts
+            leftLeg.current.position.y = THREE.MathUtils.lerp(leftLeg.current.position.y, -0.4, 1 - Math.exp(-15 * delta));
+            leftLeg.current.position.z = THREE.MathUtils.lerp(leftLeg.current.position.z, 0, 1 - Math.exp(-15 * delta));
+        }
+
+        // Shield Mesh Animation
+        if (shieldMeshRef.current) {
+            const targetScale = keys.current.block ? 1.2 : 0; // slightly larger shield
+            shieldMeshRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 1 - Math.exp(-25 * delta));
+            if (keys.current.block) {
+                shieldMeshRef.current.rotation.y += delta * 3;
+                shieldMeshRef.current.rotation.x += delta * 2;
             }
         }
 
@@ -995,21 +1059,57 @@ export function Player() {
             } else {
                 // Sword/Knife slash
                 const attackTime = (Date.now() - lastShot) / 400;
-                if (attackTime < 0.2) {
-                    // Wind up: arm goes up and back
-                    const windUpProgress = attackTime * 5; // 0 to 1
-                    rightArm.current.rotation.x = THREE.MathUtils.lerp(0, Math.PI * 0.8, windUpProgress);
-                    rightArm.current.rotation.z = THREE.MathUtils.lerp(0, 0.5, windUpProgress);
-                } else if (attackTime < 0.4) {
-                    // Slash down and across
-                    const slashProgress = (attackTime - 0.2) * 5; // 0 to 1
-                    rightArm.current.rotation.x = THREE.MathUtils.lerp(Math.PI * 0.8, -Math.PI * 0.4, slashProgress);
-                    rightArm.current.rotation.z = THREE.MathUtils.lerp(0.5, -0.8, slashProgress);
-                } else {
-                    // Recovery
-                    const returnProgress = Math.min(1, (attackTime - 0.4) / 0.6);
-                    rightArm.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.4, 0, returnProgress);
-                    rightArm.current.rotation.z = THREE.MathUtils.lerp(-0.8, 0, returnProgress);
+                
+                if (attackTime < 0.25) { // 0-100ms
+                    // Exaggerated Wind up: arm goes far back and up, torso twists back significantly
+                    const windUpProgress = attackTime * 4; // 0 to 1
+                    // Easing for snap
+                    const easeOutQuad = (t: number) => t * (2 - t);
+                    const eased = easeOutQuad(windUpProgress);
+                    
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(0, Math.PI * 0.9, eased);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(0, 1.2, eased);
+                    rightArm.current.rotation.y = THREE.MathUtils.lerp(0, 0.8, eased);
+                    
+                    if (!keys.current.block) {
+                        playerMesh.current.rotation.y = THREE.MathUtils.lerp(playerMesh.current.rotation.y, -0.6, eased);
+                    }
+                    
+                    // Twist the knife to aim for slash
+                    if (knifeRef.current) knifeRef.current.rotation.z = THREE.MathUtils.lerp(0, -Math.PI / 4, eased);
+                } else if (attackTime < 0.45) { // 100-180ms
+                    // Powerful Slash down and across, fast snap
+                    const slashProgress = (attackTime - 0.25) * 5; // 0 to 1
+                    
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(Math.PI * 0.9, -Math.PI * 0.7, slashProgress);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(1.2, -1.5, slashProgress);
+                    rightArm.current.rotation.y = THREE.MathUtils.lerp(0.8, -1.0, slashProgress);
+                    
+                    if (!keys.current.block) {
+                        playerMesh.current.rotation.y = THREE.MathUtils.lerp(playerMesh.current.rotation.y, 0.8, slashProgress);
+                        // Forward attack lunge
+                        playerMesh.current.position.z = THREE.MathUtils.lerp(0, 0.5, slashProgress);
+                        playerMesh.current.rotation.x = THREE.MathUtils.lerp(0, 0.2, slashProgress); 
+                    }
+                    
+                    if (knifeRef.current) knifeRef.current.rotation.z = THREE.MathUtils.lerp(-Math.PI / 4, Math.PI / 2, slashProgress);
+                } else { // 180-400ms
+                    // Smooth Recovery
+                    const returnProgress = Math.min(1, (attackTime - 0.45) / 0.55);
+                    const easeInQuad = (t: number) => t * t;
+                    const eased = 1 - easeInQuad(1 - returnProgress); // Smooth out return
+                    
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.7, 0, eased);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(-1.5, 0, eased);
+                    rightArm.current.rotation.y = THREE.MathUtils.lerp(-1.0, 0, eased);
+                    
+                    if (!keys.current.block) {
+                        playerMesh.current.rotation.y = THREE.MathUtils.lerp(0.8, 0, eased);
+                        playerMesh.current.position.z = THREE.MathUtils.lerp(0.5, 0, eased);
+                        playerMesh.current.rotation.x = THREE.MathUtils.lerp(0.2, 0, eased);
+                    }
+                    
+                    if (knifeRef.current) knifeRef.current.rotation.z = THREE.MathUtils.lerp(Math.PI / 2, 0, eased);
                 }
             }
         }
@@ -1077,6 +1177,10 @@ export function Player() {
     } else {
       setTrajectoryPoints([]);
     }
+  } catch (error) {
+    // Catch any Rust physics panic and ignore to drop current frame safely
+    return;
+  }
   });
 
   return (
@@ -1207,79 +1311,71 @@ export function Player() {
                   <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
                   <meshPhysicalMaterial color="#0d47a1" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
               </mesh>
-              <mesh position={[-0.15, 0.6, 0.25]} rotation={[0, 0, -0.1]}>
-                  <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
-                  <meshPhysicalMaterial color="#0d47a1" roughness={1} clearcoat={0.1} clearcoatRoughness={0.4} />
-              </mesh>
-
-              {/* Scarf / Shawl - Warrior Red */}
-              <mesh position={[0, 1.15, 0]} rotation={[0.1, 0, 0]}>
-                   <torusGeometry args={[0.3, 0.08, 16, 32]} />
-                   <meshPhysicalMaterial color="#b71c1c" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.6} />
-              </mesh>
-              {/* Scarf tail */}
-              <mesh position={[0.2, 0.9, -0.25]} rotation={[-0.5, 0, -0.2]}>
-                   <capsuleGeometry args={[0.06, 0.4, 8, 16]} />
-                   <meshPhysicalMaterial color="#b71c1c" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.6} />
-              </mesh>
             </>
           ) : (
             <>
-              {/* Shepherd Outfit */}
+              {/* Rustic Shepherd Tunic */}
               <mesh castShadow position={[0, 0.6, 0]}>
-                <cylinderGeometry args={[0.26, 0.45, 1.2, 32]} />
-                <meshPhysicalMaterial color="#e0d8c8" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} /> {/* Off-white Tunic */}
+                <cylinderGeometry args={[0.26, 0.45, 1.2, 16]} />
+                <meshPhysicalMaterial color="#dcd2c6" roughness={1} clearcoat={0} /> {/* Off-white unbleached linen */}
               </mesh>
               
-              {/* Tunic Folds (Details) */}
-              <mesh position={[0, 0.6, 0.28]} rotation={[0, 0, 0]}>
-                  <cylinderGeometry args={[0.02, 0.05, 1.1, 8]} />
-                  <meshPhysicalMaterial color="#d0c8b8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
+              {/* Leather Belt */}
+              <mesh castShadow position={[0, 0.7, 0]}>
+                <cylinderGeometry args={[0.33, 0.35, 0.1, 16]} />
+                <meshPhysicalMaterial color="#5d4037" roughness={0.7} />
               </mesh>
-              <mesh position={[0.15, 0.6, 0.25]} rotation={[0, 0, 0.1]}>
-                  <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
-                  <meshPhysicalMaterial color="#d0c8b8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
-              </mesh>
-              <mesh position={[-0.15, 0.6, 0.25]} rotation={[0, 0, -0.1]}>
-                  <cylinderGeometry args={[0.02, 0.04, 1.1, 8]} />
-                  <meshPhysicalMaterial color="#d0c8b8" roughness={1} clearcoat={0.1} clearcoatRoughness={0.8} />
+              <mesh castShadow position={[0, 0.7, 0.33]}>
+                <boxGeometry args={[0.1, 0.15, 0.05]} />
+                <meshPhysicalMaterial color="#bcaaa4" metalness={0.6} roughness={0.4} /> {/* Belt buckle */}
               </mesh>
 
-              {/* Scarf / Shawl - Shepherd Brown */}
-              <mesh position={[0, 1.15, 0]} rotation={[0.1, 0, 0]}>
-                   <torusGeometry args={[0.3, 0.08, 16, 32]} />
-                   <meshPhysicalMaterial color="#8b4513" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
-              </mesh>
-              {/* Scarf tail */}
-              <mesh position={[0.2, 0.9, -0.25]} rotation={[-0.5, 0, -0.2]}>
-                   <capsuleGeometry args={[0.06, 0.4, 8, 16]} />
-                   <meshPhysicalMaterial color="#8b4513" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
-              </mesh>
+              {/* Shepherd's Scrip (Bag) */}
+              <group position={[-0.3, 0.6, -0.15]} rotation={[0, 0, 0.2]}>
+                  {/* Leather Strap over shoulder */}
+                  <mesh position={[0.3, 0.4, 0.15]} rotation={[0, 0, -0.6]}>
+                      <cylinderGeometry args={[0.32, 0.32, 0.05, 16, 1, false, 0, Math.PI]} />
+                      <meshPhysicalMaterial color="#3e2723" roughness={0.9} />
+                  </mesh>
+                  {/* The Bag */}
+                  <mesh position={[0, -0.1, 0]}>
+                      <boxGeometry args={[0.2, 0.25, 0.1]} />
+                      <meshPhysicalMaterial color="#6d4c41" roughness={0.9} />
+                  </mesh>
+                  {/* Bag Flap */}
+                  <mesh position={[0, 0.05, 0.05]} rotation={[-0.2, 0, 0]}>
+                      <boxGeometry args={[0.2, 0.15, 0.02]} />
+                      <meshPhysicalMaterial color="#5d4037" roughness={0.9} />
+                  </mesh>
+              </group>
             </>
           )}
-
-        {/* Bag Strap */}
-        <mesh position={[0, 0.7, 0]} rotation={[0, 0, -0.8]} scale={[1, 1, 1.2]}>
-             <torusGeometry args={[0.32, 0.03, 8, 32]} />
-             <meshPhysicalMaterial color="#3E2723" clearcoat={0.3} clearcoatRoughness={0.5} />
-        </mesh>
-        
-        {/* Shepherd's Bag */}
-        <group position={[0.28, 0.4, 0.2]} rotation={[0, 0, -0.2]}>
-            <mesh castShadow>
-                 <boxGeometry args={[0.25, 0.3, 0.15]} />
-                 <meshPhysicalMaterial color="#5D4037" roughness={0.9} clearcoat={0.3} clearcoatRoughness={0.5} />
-            </mesh>
-            {/* Bag Flap */}
-            <mesh position={[0, 0.15, 0.08]} rotation={[0.2, 0, 0]}>
-                 <boxGeometry args={[0.26, 0.15, 0.02]} />
-                 <meshPhysicalMaterial color="#4E342E" roughness={0.9} clearcoat={0.3} clearcoatRoughness={0.5} />
-            </mesh>
-            {/* Bag Button */}
-            <mesh position={[0, 0.08, 0.09]} rotation={[Math.PI/2, 0, 0]}>
-                 <cylinderGeometry args={[0.03, 0.03, 0.02, 16]} />
-                 <meshPhysicalMaterial color="#FFD700" metalness={0.6} roughness={0.4} clearcoat={1.0} clearcoatRoughness={0.1} />
-            </mesh>
+              {/* Scarf / Shawl */}
+              {useStore.getState().isExtraGame ? (
+                <>
+                  <mesh position={[0, 1.15, 0]} rotation={[0.1, 0, 0]}>
+                       <torusGeometry args={[0.3, 0.08, 16, 32]} />
+                       <meshPhysicalMaterial color="#b71c1c" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.6} />
+                  </mesh>
+                  <mesh position={[0.2, 0.9, -0.25]} rotation={[-0.5, 0, -0.2]}>
+                       <capsuleGeometry args={[0.06, 0.4, 8, 16]} />
+                       <meshPhysicalMaterial color="#b71c1c" roughness={0.8} clearcoat={0.2} clearcoatRoughness={0.6} />
+                  </mesh>
+                </>
+              ) : (
+                <>
+                  {/* Scarf / Shawl - Shepherd Brown */}
+                  <mesh position={[0, 1.15, 0]} rotation={[0.1, 0, 0]}>
+                       <torusGeometry args={[0.3, 0.08, 16, 32]} />
+                       <meshPhysicalMaterial color="#8b4513" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
+                  </mesh>
+                  {/* Scarf tail */}
+                  <mesh position={[0.2, 0.9, -0.25]} rotation={[-0.5, 0, -0.2]}>
+                       <capsuleGeometry args={[0.06, 0.4, 8, 16]} />
+                       <meshPhysicalMaterial color="#8b4513" roughness={0.9} clearcoat={0.1} clearcoatRoughness={0.8} />
+                  </mesh>
+                </>
+              )}
         </group>
         
         {/* Belt/Sash - Detailed */}
@@ -1586,7 +1682,22 @@ export function Player() {
                 <meshPhysicalMaterial color="#3E2723" clearcoat={0.3} clearcoatRoughness={0.5} />
             </mesh>
         </group>
-        </group>
+
+        {/* Visual Shield when blocking */}
+        <mesh ref={shieldMeshRef} position={[0, 1, 0]} scale={[0, 0, 0]}>
+            <sphereGeometry args={[1.2, 32, 32]} />
+            <meshPhysicalMaterial 
+                color="#4da6ff" 
+                emissive="#2a75d3"
+                emissiveIntensity={0.5}
+                transparent={true} 
+                opacity={0.3} 
+                roughness={0.1} 
+                transmission={0.9} 
+                thickness={0.1}
+                side={THREE.DoubleSide}
+            />
+        </mesh>
       </group>
     </RigidBody>
     </>

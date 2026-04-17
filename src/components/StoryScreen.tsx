@@ -71,9 +71,15 @@ const STORY_SCREENS = [
   },
   {
     id: 12,
-    bgPrompt: "David as a young king on a white horse, leading an army of Israelite soldiers. Philistine army in the distance. Epic battlefield, cinematic lighting, low poly style",
-    text: "Anos se passaram. O jovem pastor tornou-se um guerreiro ungido. Agora, montado em seu cavalo, Davi lidera o exército de Israel contra a opressão dos Filisteus.",
+    bgPrompt: "David as a young king on a white horse, leading an army of Israelite soldiers. Philistine army in the distance with a towering giant. Epic battlefield, cinematic lighting, low poly style",
+    text: "Anos se passaram. Um desafio temível se ergueu: O Gigante Golias, campeão dos Filisteus. Com apenas sua funda e pedras, Davi desce ao vale para defender sua nação.",
     buttons: ['fight_philistines']
+  },
+  {
+    id: 13,
+    bgPrompt: "Epic victory scene, young David dropping his sling after defeating the giant Goliath, Israelites cheering in the background, cinematic lighting, masterpiece",
+    text: "O gigante caiu! Com uma única pedra e uma fé inabalável, Davi provou que a verdadeira força vem do Senhor. O exército de Israel celebra a grande vitória!",
+    buttons: ['finish']
   }
 ];
 
