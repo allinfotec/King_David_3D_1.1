@@ -107,7 +107,7 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
   return (
     <div 
       ref={containerRef}
-      className={`relative w-16 h-16 p-2 rounded-xl border-2 flex flex-col items-center justify-center transition-all backdrop-blur-md touch-none select-none ${colorClass}`}
+      className={`relative w-full h-full p-2 border-2 flex flex-col items-center justify-center transition-all backdrop-blur-md touch-none select-none rounded-full ${colorClass}`}
       onPointerDown={handlePointerDown}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -125,7 +125,7 @@ export function AimJoystick({ onAim, onAttack, icon, label, colorClass }: AimJoy
       
       {/* Background indicator when active */}
       {active && (
-        <div className="absolute inset-0 rounded-xl bg-white/10 pointer-events-none" />
+        <div className="absolute inset-0 rounded-full bg-white/10 pointer-events-none" />
       )}
     </div>
   );

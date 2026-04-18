@@ -71,14 +71,32 @@ const STORY_SCREENS = [
   },
   {
     id: 12,
-    bgPrompt: "David as a young king on a white horse, leading an army of Israelite soldiers. Philistine army in the distance with a towering giant. Epic battlefield, cinematic lighting, low poly style",
-    text: "Anos se passaram. Um desafio temível se ergueu: O Gigante Golias, campeão dos Filisteus. Com apenas sua funda e pedras, Davi desce ao vale para defender sua nação.",
-    buttons: ['fight_philistines']
+    bgPrompt: "Valley of Elah. The Philistine army arrayed on a mountain on one side, Israel on the other. A towering giant warrior covered in bronze armor, Goliath, yelling challenges across the valley. Cinematic, epic, biblical scene",
+    text: "E ajuntaram os filisteus os seus exércitos para a peleja no Vale de Elá. Saiu do arraial inimigo um homem guerreiro, cujo nome era Golias, que desafiava as fileiras de Israel dia e noite.",
+    buttons: ['next']
   },
   {
     id: 13,
+    bgPrompt: "Young David, a shepherd boy, arriving at the military camp of Israel, carrying provisions. He looks intensely at the giant Goliath in the distance. Cinematic, dramatic lighting, highly detailed",
+    text: "Davi foi enviado por seu pai ao acampamento para levar mantimentos aos seus irmãos. Ao ouvir as afrontas do gigante, indignou-se: 'Quem é este incircunciso filisteu, para afrontar os exércitos do Deus vivo?'",
+    buttons: ['prev', 'next'] 
+  },
+  {
+    id: 14,
+    bgPrompt: "Young shepherd David refusing King Saul's heavy bronze armor. David holding only his wooden staff, a shepherd's bag, and a simple sling. Epic dramatic lighting, biblical scene",
+    text: "Levado ao rei Saul, Davi recusou as pesadas armaduras reais. 'Não posso andar com isto', disse ele. Tomou seu cajado, escolheu no ribeiro cinco seixos lisos e avançou com sua funda na mão.",
+    buttons: ['prev', 'fight_philistines']
+  },
+  {
+    id: 15,
     bgPrompt: "Epic victory scene, young David dropping his sling after defeating the giant Goliath, Israelites cheering in the background, cinematic lighting, masterpiece",
-    text: "O gigante caiu! Com uma única pedra e uma fé inabalável, Davi provou que a verdadeira força vem do Senhor. O exército de Israel celebra a grande vitória!",
+    text: "O gigante caiu! Com uma única pedra guiada por uma fé inabalável, Davi provou que 'do Senhor é a guerra'. O grande colosso foi derrubado e Israel celebrou a grande vitória!",
+    buttons: ['prev', 'next']
+  },
+  {
+    id: 16,
+    bgPrompt: "King David wearing royal robes playing the harp in the palace of Jerusalem, peaceful atmosphere, warm cinematic lighting, epic conclusion, masterpiece",
+    text: "PARABÉNS, JOGADOR! VOCÊ COMPLETOU A JORNADA!\n\nDe um simples pastor no campo ao maior rei da história de Israel, Davi nos ensina que, com Deus, nenhum gigante é invencível. A lenda do Rei Davi apenas começou...",
     buttons: ['finish']
   }
 ];
@@ -191,8 +209,8 @@ export function StoryScreen() {
         </div>
       )}
 
-      <div className="absolute bottom-8 left-8 right-8 flex justify-between pointer-events-none">
-        <div className="pointer-events-auto">
+      <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end pointer-events-none">
+        <div className="pointer-events-auto flex gap-4 items-end">
           {screenData.buttons.includes('prev') && (
             <button 
               onClick={() => handleAction('prev')}
@@ -201,9 +219,22 @@ export function StoryScreen() {
               <ChevronLeft size={32} />
             </button>
           )}
+
+          {screenData.buttons.includes('start_intro') && (
+            <motion.button 
+              onClick={() => handleAction('start_intro')}
+              className="px-6 py-2.5 text-sm uppercase bg-yellow-600/80 border-2 border-yellow-400 rounded-full flex items-center gap-2 text-white font-bold hover:bg-yellow-500 backdrop-blur-sm shadow-[0_0_15px_rgba(234,179,8,0.5)] cursor-pointer"
+              style={{ fontFamily: "'Montserrat', sans-serif" }}
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+            >
+              Iniciar o Jogo
+              <ChevronRight size={20} />
+            </motion.button>
+          )}
         </div>
 
-        <div className="pointer-events-auto flex gap-4">
+        <div className="pointer-events-auto flex gap-4 items-end">
           {screenData.buttons.includes('jump_bear') && (
             <button 
               onClick={() => handleAction('jump_bear')}
@@ -281,26 +312,17 @@ export function StoryScreen() {
             </button>
           )}
 
-          {screenData.buttons.includes('start_intro') && (
-            <button 
-              onClick={() => handleAction('start_intro')}
-              className="px-8 py-3 bg-yellow-600/80 border-2 border-yellow-400 rounded-full flex items-center gap-3 text-white font-bold hover:bg-yellow-500 transition-all hover:scale-105 backdrop-blur-sm shadow-[0_0_20px_rgba(234,179,8,0.5)]"
-              style={{ fontFamily: "'Montserrat', sans-serif" }}
-            >
-              Iniciar o Jogo
-              <ChevronRight size={24} />
-            </button>
-          )}
-
           {screenData.buttons.includes('start_extra') && (
-            <button 
+            <motion.button 
               onClick={() => handleAction('start_extra')}
-              className="px-8 py-3 bg-blue-600/80 border-2 border-blue-400 rounded-full flex items-center gap-3 text-white font-bold hover:bg-blue-500 transition-all hover:scale-105 backdrop-blur-sm shadow-[0_0_20px_rgba(37,99,235,0.5)]"
+              className="px-6 py-2.5 text-sm uppercase bg-blue-600/80 border-2 border-blue-400 rounded-full flex items-center gap-2 text-white font-bold hover:bg-blue-500 backdrop-blur-sm shadow-[0_0_15px_rgba(37,99,235,0.5)] cursor-pointer"
               style={{ fontFamily: "'Montserrat', sans-serif" }}
+              animate={{ y: [0, -8, 0] }}
+              transition={{ duration: 2.5, delay: 0.2, repeat: Infinity, ease: "easeInOut" }}
             >
-              MODO EXTRA: GUERRA
-              <ChevronRight size={24} />
-            </button>
+              Modo Guerra
+              <ChevronRight size={20} />
+            </motion.button>
           )}
 
           {screenData.buttons.includes('fight_philistines') && (

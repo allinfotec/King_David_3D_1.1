@@ -45,6 +45,7 @@ interface GameState {
   retryCount: number;
   volume: number;
   weapon: 'sling' | 'knife';
+  gameWon: boolean;
   stones: Stone[];
   enemies: Enemy[];
   effects: Effect[];
@@ -57,6 +58,7 @@ interface GameState {
   setDodging: (dodging: boolean) => void;
   setBlocking: (blocking: boolean) => void;
   setTargetId: (id: string | null) => void;
+  setGameWon: (won: boolean) => void;
   startGame: () => void;
   resumeGame: () => void;
   reset: () => void;
@@ -108,6 +110,7 @@ export const useStore = create<GameState>((set) => ({
   retryCount: 0,
   volume: 1,
   weapon: 'sling',
+  gameWon: false,
   stones: [],
   enemies: [],
   effects: [],
@@ -122,11 +125,12 @@ export const useStore = create<GameState>((set) => ({
   setDodging: (dodging) => set({ isDodging: dodging }),
   setBlocking: (blocking) => set({ isBlocking: blocking }),
   setTargetId: (id) => set({ targetId: id }),
-  startGame: () => set({ isStarted: true, health: 100, score: 0, isPaused: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, isAnointing: false, isExtraGame: false, storyScreen: 0, stones: [], enemies: [], effects: [], targetId: null }),
+  setGameWon: (won) => set({ gameWon: won }),
+  startGame: () => set({ isStarted: true, health: 100, score: 0, isPaused: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, isAnointing: false, isExtraGame: false, storyScreen: 0, gameWon: false, stones: [], enemies: [], effects: [], targetId: null }),
   resumeGame: () => set({ isStarted: true, isPaused: false, storyScreen: 0, stones: [], enemies: [], effects: [] }),
-  reset: () => set({ health: 100, score: 0, isPaused: false, isDodging: false, isBlocking: false, isStarted: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, isAnointing: false, isExtraGame: false, storyScreen: 1, stones: [], enemies: [], effects: [], targetId: null }),
-  jumpToPhase: (phase) => set({ isStarted: true, health: 100, score: 0, isPaused: false, phase: phase, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, isAnointing: false, isExtraGame: false, storyScreen: 0, stones: [], enemies: [], effects: [], targetId: null }),
-  retryPhase: () => set((state) => ({ health: 100, isPaused: false, isDodging: false, isBlocking: false, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, isAnointing: false, stones: [], enemies: [], effects: [], targetId: null, retryCount: state.retryCount + 1 })),
+  reset: () => set({ health: 100, score: 0, isPaused: false, isDodging: false, isBlocking: false, isStarted: false, phase: 1, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, isAnointing: false, isExtraGame: false, storyScreen: 1, gameWon: false, stones: [], enemies: [], effects: [], targetId: null }),
+  jumpToPhase: (phase) => set({ isStarted: true, health: 100, score: 0, isPaused: false, phase: phase, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, isAnointing: false, isExtraGame: false, storyScreen: 0, gameWon: false, stones: [], enemies: [], effects: [], targetId: null }),
+  retryPhase: () => set((state) => ({ health: 100, isPaused: false, isDodging: false, isBlocking: false, enemiesKilledInPhase: 0, phaseMessage: null, isTransitioningPhase: false, isWalkingHome: false, isAnointing: false, gameWon: false, stones: [], enemies: [], effects: [], targetId: null, retryCount: state.retryCount + 1 })),
   shootStone: (position, velocity) => set((state) => ({
     stones: [...state.stones, { id: nanoid(), position, velocity }]
   })),

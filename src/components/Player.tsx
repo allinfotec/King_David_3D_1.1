@@ -417,7 +417,11 @@ export function Player() {
           }
         });
         
-        setTimeout(() => setIsAttacking(false), 400);
+        setTimeout(() => {
+            if (Date.now() - (lastShot || 0) > 600) {
+                setIsAttacking(false);
+            }
+        }, 700);
       }
     };
 
@@ -728,11 +732,32 @@ export function Player() {
             if (rollGroup.current && playerMesh.current) {
                 // Front flip around local X axis for cambalhota
                 rollGroup.current.rotation.x = progress * Math.PI * 2;
+                
+                // Lift him up during the flip so he rotates around his center mass
+                rollGroup.current.position.y = Math.sin(progress * Math.PI) * 0.8;
+                
+                // Tuck arms and legs into a ball
+                const tuck = Math.sin(progress * Math.PI);
+                if (leftArm.current) leftArm.current.rotation.x = tuck * 2.0;
+                if (rightArm.current) rightArm.current.rotation.x = tuck * 2.0;
+                if (leftLeg.current) {
+                    leftLeg.current.rotation.x = tuck * 1.5;
+                    leftLeg.current.position.y = 0.5 + tuck * 0.3;
+                }
+                if (rightLeg.current) {
+                    rightLeg.current.rotation.x = tuck * 1.5;
+                    rightLeg.current.position.y = 0.5 + tuck * 0.3;
+                }
             }
         } else {
             doubleJumpState.current.active = false;
             if (rollGroup.current && !rollState.current.active) {
                 rollGroup.current.rotation.x = 0;
+                rollGroup.current.position.y = 0;
+                
+                // Ensure limbs are reset
+                if (leftLeg.current) { leftLeg.current.rotation.x = 0; leftLeg.current.position.y = 0.5; }
+                if (rightLeg.current) { rightLeg.current.rotation.x = 0; rightLeg.current.position.y = 0.5; }
             }
         }
     }
@@ -1000,7 +1025,7 @@ export function Player() {
             rightLeg.current.rotation.x = THREE.MathUtils.lerp(rightLeg.current.rotation.x, 0.2, blockLerp);
 
             // Left leg bends
-            leftLeg.current.position.y = THREE.MathUtils.lerp(leftLeg.current.position.y, -0.3, blockLerp);
+            leftLeg.current.position.y = THREE.MathUtils.lerp(leftLeg.current.position.y, 0.6, blockLerp); // Lift knee slightly
             leftLeg.current.position.z = THREE.MathUtils.lerp(leftLeg.current.position.z, -0.3, blockLerp);
             
             if (!isAttacking) {
@@ -1014,7 +1039,7 @@ export function Player() {
             leftArm.current.rotation.y = THREE.MathUtils.lerp(leftArm.current.rotation.y, 0, 1 - Math.exp(-15 * delta));
             
             // Reset leg shifts
-            leftLeg.current.position.y = THREE.MathUtils.lerp(leftLeg.current.position.y, -0.4, 1 - Math.exp(-15 * delta));
+            leftLeg.current.position.y = THREE.MathUtils.lerp(leftLeg.current.position.y, 0.5, 1 - Math.exp(-15 * delta));
             leftLeg.current.position.z = THREE.MathUtils.lerp(leftLeg.current.position.z, 0, 1 - Math.exp(-15 * delta));
         }
 
@@ -1031,39 +1056,52 @@ export function Player() {
         // Attack Animation (Right Arm)
         if (isAttacking) {
             if (weapon === 'sling') {
-                // Sling animation: Wind up and Throw
+                // Dynamic Sling animation: Spinning windup and Snap Throw
                 const timeSinceShot = Date.now() - lastShot;
                 
-                if (timeSinceShot < 150) {
-                    // Wind up Phase (0-150ms) - Very fast pull back
-                    // Rotate arm back and up significantly
-                    const windUpLerp = 1 - Math.exp(-40 * delta);
-                    rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, -Math.PI * 1.8, windUpLerp);
-                    rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, 1.5, windUpLerp); 
-                } else {
-                    // Throw Phase (150ms+)
-                    const throwProgress = (timeSinceShot - 150) / 350; // Remaining time
+                if (timeSinceShot < 250) {
+                    // Wind up Phase (0-250ms) - Spin around head
+                    const spinProgress = timeSinceShot / 250; 
+                    const spinAngle = spinProgress * Math.PI * 6; // 3 full spins
                     
-                    if (throwProgress < 0.2) {
-                        // Snap Forward (Release) - Instant whip
-                        const snapLerp = 1 - Math.exp(-80 * delta);
-                        rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, Math.PI * 0.8, snapLerp);
-                        rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, -0.5, snapLerp);
-                    } else {
-                        // Follow Through / Recovery - Slow return
-                        const recoveryLerp = 1 - Math.exp(-15 * delta);
-                        rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, 0, recoveryLerp);
-                        rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, -0.1, recoveryLerp);
+                    // Arm positioning for overhead spin
+                    rightArm.current.rotation.x = -Math.PI / 2 + Math.cos(spinAngle) * 0.4;
+                    rightArm.current.rotation.z = -1.0 + Math.sin(spinAngle) * 0.4;
+                    
+                    // Twist body into the throw
+                    if (!keys.current.block) {
+                        playerMesh.current.rotation.y = THREE.MathUtils.lerp(playerMesh.current.rotation.y, 1.2, 0.2);
+                        // Lean back a bit
+                        playerMesh.current.rotation.x = THREE.MathUtils.lerp(playerMesh.current.rotation.x, -0.2, 0.1);
+                    }
+                } else if (timeSinceShot < 350) {
+                    // Throw Phase (250-350ms) - Snap Forward (Release)
+                    const snapLerp = 1 - Math.exp(-60 * delta);
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, Math.PI * 0.9, snapLerp);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, -0.2, snapLerp);
+                    
+                    // Body snaps forward in the throw direction
+                    if (!keys.current.block) {
+                        playerMesh.current.rotation.y = THREE.MathUtils.lerp(playerMesh.current.rotation.y, -0.5, 0.3);
+                        playerMesh.current.rotation.x = THREE.MathUtils.lerp(playerMesh.current.rotation.x, 0.3, 0.2);
+                    }
+                } else {
+                    // Follow Through / Recovery - Slow return
+                    const recoveryLerp = 1 - Math.exp(-10 * delta);
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(rightArm.current.rotation.x, 0, recoveryLerp);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(rightArm.current.rotation.z, -0.1, recoveryLerp);
+                    if (!keys.current.block) {
+                        playerMesh.current.rotation.y = THREE.MathUtils.lerp(playerMesh.current.rotation.y, 0, recoveryLerp);
+                        playerMesh.current.rotation.x = THREE.MathUtils.lerp(playerMesh.current.rotation.x, 0, recoveryLerp);
                     }
                 }
             } else {
-                // Sword/Knife slash
+                // Sword/Knife multi-hit dynamic slash
                 const attackTime = (Date.now() - lastShot) / 400;
                 
                 if (attackTime < 0.25) { // 0-100ms
                     // Exaggerated Wind up: arm goes far back and up, torso twists back significantly
                     const windUpProgress = attackTime * 4; // 0 to 1
-                    // Easing for snap
                     const easeOutQuad = (t: number) => t * (2 - t);
                     const eased = easeOutQuad(windUpProgress);
                     
@@ -1074,12 +1112,10 @@ export function Player() {
                     if (!keys.current.block) {
                         playerMesh.current.rotation.y = THREE.MathUtils.lerp(playerMesh.current.rotation.y, -0.6, eased);
                     }
-                    
-                    // Twist the knife to aim for slash
                     if (knifeRef.current) knifeRef.current.rotation.z = THREE.MathUtils.lerp(0, -Math.PI / 4, eased);
                 } else if (attackTime < 0.45) { // 100-180ms
-                    // Powerful Slash down and across, fast snap
-                    const slashProgress = (attackTime - 0.25) * 5; // 0 to 1
+                    // Powerful Slash down and across
+                    const slashProgress = (attackTime - 0.25) * 5; 
                     
                     rightArm.current.rotation.x = THREE.MathUtils.lerp(Math.PI * 0.9, -Math.PI * 0.7, slashProgress);
                     rightArm.current.rotation.z = THREE.MathUtils.lerp(1.2, -1.5, slashProgress);
@@ -1088,23 +1124,30 @@ export function Player() {
                     if (!keys.current.block) {
                         playerMesh.current.rotation.y = THREE.MathUtils.lerp(playerMesh.current.rotation.y, 0.8, slashProgress);
                         // Forward attack lunge
-                        playerMesh.current.position.z = THREE.MathUtils.lerp(0, 0.5, slashProgress);
+                        playerMesh.current.position.z = THREE.MathUtils.lerp(0, 0.5, Math.sin(slashProgress * Math.PI));
                         playerMesh.current.rotation.x = THREE.MathUtils.lerp(0, 0.2, slashProgress); 
                     }
-                    
                     if (knifeRef.current) knifeRef.current.rotation.z = THREE.MathUtils.lerp(-Math.PI / 4, Math.PI / 2, slashProgress);
-                } else { // 180-400ms
+                } else if (attackTime < 0.65) {
+                    // Secondary combo follow-through swipe up
+                    const swipeProgress = (attackTime - 0.45) * 5;
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.7, -0.2, swipeProgress);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(-1.5, 1.5, swipeProgress);
+                    if (!keys.current.block) {
+                       playerMesh.current.rotation.y = THREE.MathUtils.lerp(0.8, -0.4, swipeProgress);
+                    }
+                } else { 
                     // Smooth Recovery
-                    const returnProgress = Math.min(1, (attackTime - 0.45) / 0.55);
+                    const returnProgress = Math.min(1, (attackTime - 0.65) / 0.35);
                     const easeInQuad = (t: number) => t * t;
                     const eased = 1 - easeInQuad(1 - returnProgress); // Smooth out return
                     
-                    rightArm.current.rotation.x = THREE.MathUtils.lerp(-Math.PI * 0.7, 0, eased);
-                    rightArm.current.rotation.z = THREE.MathUtils.lerp(-1.5, 0, eased);
+                    rightArm.current.rotation.x = THREE.MathUtils.lerp(-0.2, 0, eased);
+                    rightArm.current.rotation.z = THREE.MathUtils.lerp(1.5, 0, eased);
                     rightArm.current.rotation.y = THREE.MathUtils.lerp(-1.0, 0, eased);
                     
                     if (!keys.current.block) {
-                        playerMesh.current.rotation.y = THREE.MathUtils.lerp(0.8, 0, eased);
+                        playerMesh.current.rotation.y = THREE.MathUtils.lerp(-0.4, 0, eased);
                         playerMesh.current.position.z = THREE.MathUtils.lerp(0.5, 0, eased);
                         playerMesh.current.rotation.x = THREE.MathUtils.lerp(0.2, 0, eased);
                     }
@@ -1376,7 +1419,6 @@ export function Player() {
                   </mesh>
                 </>
               )}
-        </group>
         
         {/* Belt/Sash - Detailed */}
         <mesh castShadow position={[0, 0.6, 0]} scale={[1.05, 1, 1.05]}>
@@ -1681,6 +1723,7 @@ export function Player() {
                 <boxGeometry args={[0.11, 0.02, 0.02]} />
                 <meshPhysicalMaterial color="#3E2723" clearcoat={0.3} clearcoatRoughness={0.5} />
             </mesh>
+        </group>
         </group>
 
         {/* Visual Shield when blocking */}

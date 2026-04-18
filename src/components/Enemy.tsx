@@ -66,7 +66,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
 
   // Stats based on type
   const getEnemySpeed = () => {
-    if (type === 'goliath') return 3.5;
+    if (type === 'goliath') return health < maxHealth / 2 ? 6.5 : 4.0;
     if (type === 'philistine_heavy') return 4.0;
     if (type === 'philistine_archer') return 5.5;
     if (type === 'philistine_soldier') return 5.0;
@@ -74,7 +74,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   };
 
   const getAttackDamage = () => {
-    if (type === 'goliath') return 60;
+    if (type === 'goliath') return health < maxHealth / 2 ? 80 : 50;
     if (type === 'philistine_heavy') return 30;
     if (type === 'philistine_archer') return 15;
     if (type === 'philistine_soldier') return 20;
@@ -106,6 +106,25 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
   const EYE_COLOR = type === 'bear' ? '#ff4400' : type === 'lion' ? '#ffaa00' : '#ff2200'; // Piercing red/orange for wolf
   const NOSE_COLOR = type === 'lion' ? '#3e2723' : '#111'; // Dark brown nose for lion
   const TONGUE_COLOR = '#e91e63'; // Pink tongue
+
+  const prevHealth = useRef(health);
+  const hitEffectTime = useRef(0);
+  
+  useEffect(() => {
+    if (health < prevHealth.current && health > 0) {
+        hitEffectTime.current = Date.now();
+        // Shake body on hit instantly 
+        if (group.current) {
+            group.current.position.y += 0.2; // slight knock up
+        }
+        
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/216/216-preview.mp3');
+        audio.volume = 0.6 * useStore.getState().volume;
+        audio.playbackRate = 1.0 + Math.random() * 0.2;
+        audio.play().catch(() => {});
+    }
+    prevHealth.current = health;
+  }, [health]);
 
   // Listen for player attacks to trigger dodges/blocks
   useEffect(() => {
@@ -206,6 +225,42 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
     if (isStaggered || isBlocking) {
       rigidBody.current.setLinvel({ x: 0, y: rigidBody.current.linvel().y, z: 0 }, true);
       return;
+    }
+
+    // Dynamic Hit Reaction (Flashing and Shaking)
+    if (hitEffectTime.current > 0) {
+        const timeSinceHit = Date.now() - hitEffectTime.current;
+        if (timeSinceHit < 250) {
+            const shakeProgress = timeSinceHit / 250;
+            if (group.current) {
+                // Intense shaking side-to-side
+                group.current.position.x = (Math.random() - 0.5) * 0.5 * (1 - shakeProgress);
+                group.current.position.z = (Math.random() - 0.5) * 0.5 * (1 - shakeProgress);
+                // Pulse scale
+                const scalePulse = SCALE * (1 + 0.2 * Math.sin(shakeProgress * Math.PI));
+                group.current.scale.setScalar(scalePulse);
+            }
+            if (bodyRef.current && bodyRef.current.material) {
+                const mat = bodyRef.current.material as THREE.MeshStandardMaterial;
+                mat.emissive = new THREE.Color(0xff0000);
+                mat.emissiveIntensity = 0.5 * (1 - shakeProgress);
+            }
+        } else {
+            hitEffectTime.current = 0; // Reset
+            if (group.current) {
+                group.current.position.x = 0;
+                group.current.position.z = 0;
+                // Scale gradually returns to normal later down below, but we enforce end of hit
+            }
+            if (bodyRef.current && bodyRef.current.material) {
+                const mat = bodyRef.current.material as THREE.MeshStandardMaterial;
+                mat.emissive = new THREE.Color(0x000000);
+                mat.emissiveIntensity = 0;
+            }
+        }
+    } else if (group.current) {
+        // Return to normal scale smoothly
+        group.current.scale.setScalar(THREE.MathUtils.lerp(group.current.scale.x, SCALE, 10 * delta));
     }
 
     if (isDodgingEnemy) {
@@ -328,9 +383,12 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
       
       // Attack Logic Start
       let attackRange = isHumanoid ? 3.5 : 2.5;
-      if (type === 'goliath') attackRange = 5.5;
+      
+      const isEnraged = type === 'goliath' && health < maxHealth / 2;
+      
+      if (type === 'goliath') attackRange = isEnraged ? 7.0 : 5.5;
 
-      const cooldownMultiplier = state === 'berserk' ? 0.5 : 1;
+      const cooldownMultiplier = (state === 'berserk' || isEnraged) ? 0.4 : 1;
       
       if (distToPlayer < attackRange && !isAttacking.current && now - lastAttackTime.current > (ATTACK_COOLDOWN * cooldownMultiplier)) {
           isAttacking.current = true;
@@ -339,9 +397,16 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           
           if (type === 'goliath') {
               const r = Math.random();
-              if (r < 0.35) currentAttackType.current = 'slam';
-              else if (r < 0.70) currentAttackType.current = 'charge';
-              else currentAttackType.current = 'sweep';
+              if (isEnraged) {
+                  // Enraged Goliath favors wild sweeping and rapid charges
+                  if (r < 0.20) currentAttackType.current = 'slam';
+                  else if (r < 0.60) currentAttackType.current = 'charge';
+                  else currentAttackType.current = 'sweep';
+              } else {
+                  if (r < 0.35) currentAttackType.current = 'slam';
+                  else if (r < 0.70) currentAttackType.current = 'charge';
+                  else currentAttackType.current = 'sweep';
+              }
           } else {
               currentAttackType.current = 'normal';
           }
@@ -354,9 +419,9 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
           let totalDuration = 900;
           
           if (type === 'goliath') {
-              if (currentAttackType.current === 'slam') { windupDuration = 800; totalDuration = 1400; }
-              else if (currentAttackType.current === 'charge') { windupDuration = 600; totalDuration = 1200; }
-              else { windupDuration = 500; totalDuration = 1000; } // sweep
+              if (currentAttackType.current === 'slam') { windupDuration = isEnraged ? 600 : 800; totalDuration = isEnraged ? 1000 : 1400; }
+              else if (currentAttackType.current === 'charge') { windupDuration = isEnraged ? 400 : 600; totalDuration = isEnraged ? 800 : 1200; }
+              else { windupDuration = isEnraged ? 300 : 500; totalDuration = isEnraged ? 700 : 1000; } // sweep
           }
 
           // Apply damage / impulse at the moment of strike
@@ -376,17 +441,18 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                   if (type === 'lion') {
                       rigidBody.current.applyImpulse({ x: lungeDir.x * 30, y: 5, z: lungeDir.z * 30 }, true);
                   } else if (type === 'goliath') {
+                      const impulseMult = isEnraged ? 1.5 : 1.0;
                       if (currentAttackType.current === 'charge') {
-                          rigidBody.current.applyImpulse({ x: lungeDir.x * 80, y: 2, z: lungeDir.z * 80 }, true);
+                          rigidBody.current.applyImpulse({ x: lungeDir.x * 120 * impulseMult, y: 2, z: lungeDir.z * 120 * impulseMult }, true);
                       } else if (currentAttackType.current === 'slam') {
                           // Minimal forward momentum, massive downward hit
-                          rigidBody.current.applyImpulse({ x: lungeDir.x * 10, y: -10, z: lungeDir.z * 10 }, true);
+                          rigidBody.current.applyImpulse({ x: lungeDir.x * 15 * impulseMult, y: -10, z: lungeDir.z * 15 * impulseMult }, true);
                           // Play heavy impact effect
                           const slamRadius = 3;
                           useStore.getState().addEffect([currentPos.x + lungeDir.x * 1.5, currentPos.y, currentPos.z + lungeDir.z * 1.5], 'impact');
                       } else {
                           // Sweep
-                          rigidBody.current.applyImpulse({ x: lungeDir.x * 20, y: 1, z: lungeDir.z * 20 }, true);
+                          rigidBody.current.applyImpulse({ x: lungeDir.x * 25 * impulseMult, y: 1, z: lungeDir.z * 25 * impulseMult }, true);
                       }
                   } else {
                       rigidBody.current.applyImpulse({ x: lungeDir.x * 20, y: 2, z: lungeDir.z * 20 }, true);
@@ -395,6 +461,7 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                   // Damage Calculation
                   const hitDist = new THREE.Vector3(currentPos.x, 0, currentPos.z).distanceTo(new THREE.Vector3(pPos.x, 0, pPos.z));
                   let effectiveRange = type === 'goliath' ? (currentAttackType.current === 'slam' ? 6.0 : 5.0) : 3.5;
+                  if (type === 'goliath' && isEnraged) effectiveRange += 1.5;
                   
                   if (hitDist < effectiveRange && !useStore.getState().isDodging) {
                       const isPlayerBlocking = useStore.getState().isBlocking;
@@ -912,9 +979,19 @@ export function Enemy({ id, position, health, maxHealth, type }: EnemyProps) {
                    metalness={0.9}
                    clearcoat={0.3}
                    clearcoatRoughness={0.8}
+                   emissive={health < maxHealth / 2 ? "#500" : "#000"}
+                   emissiveIntensity={health < maxHealth / 2 ? 0.8 : 0}
                  />
                </mesh>
                
+               {/* Enraged Aura */}
+               {health < maxHealth / 2 && (
+                   <mesh position={[0, 0.5, 0]}>
+                       <sphereGeometry args={[1.5, 16, 16]} />
+                       <meshBasicMaterial color="#ff0000" transparent opacity={0.15} blending={THREE.AdditiveBlending} depthWrite={false} />
+                   </mesh>
+               )}
+
                {/* Pectoral Plates */}
                <mesh position={[0.18, 0.7, 0.2]} rotation={[0, 0.1, 0]}>
                  <boxGeometry args={[0.3, 0.35, 0.1]} />
